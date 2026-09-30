@@ -1,0 +1,25 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+## Node / TypeScript
+node_modules/
+dist/
+npm-debug.log*
+
+## Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+## Env / secrets
+.env
+.env.*
+appsettings.Development.json
+appsettings.*.local.json
+
+## OS
+.DS_Store
