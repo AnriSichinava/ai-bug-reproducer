@@ -24,5 +24,11 @@ services:
     depends_on:
       - sql-server
 
+  target-app:
+    build:
+      context: ./target-app
+    ports:
+      - "4000:4000"
+
 volumes:
   sql-data:

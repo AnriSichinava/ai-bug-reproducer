@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cart — Demo Cart App</title>
+</head>
+<body>
+  <nav>
+    <a href="/products.html">Products</a> |
+    <a href="/cart.html">Cart</a> |
+    <button id="logout-btn">Logout</button>
+  </nav>
+  <h1>Your Cart</h1>
+  <ul id="cart-list"></ul>
+  <p id="message"></p>
+
+  <script>
+    async function loadCart() {
+      const res = await fetch('/api/cart');
+      const items = await res.json();
+      const list = document.getElementById('cart-list');
+      list.innerHTML = '';
+      for (const item of items) {
+        const li = document.createElement('li');
+        li.textContent = `${item.name} — $${item.price} `;
+        const button = document.createElement('button');
+        button.textContent = 'Remove';
+        button.id = `remove-item-${item.id}`;
+        button.addEventListener('click', async () => {
+          const delRes = await fetch(`/api/cart/items/${item.id}`, { method: 'DELETE' });
+          const messageEl = document.getElementById('message');
+          if (delRes.ok) {
+            messageEl.textContent = 'Item removed.';
+            loadCart();
+          } else {
+            messageEl.textContent = 'Something went wrong.';
+          }
+        });
+        li.appendChild(button);
+        list.appendChild(li);
+      }
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    loadCart();
+  </script>
+</body>
+</html>

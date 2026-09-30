@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Products — Demo Cart App</title>
+</head>
+<body>
+  <nav>
+    <a href="/products.html">Products</a> |
+    <a href="/cart.html">Cart</a> |
+    <button id="logout-btn">Logout</button>
+  </nav>
+  <h1>Products</h1>
+  <ul id="product-list"></ul>
+  <p id="message"></p>
+
+  <script>
+    async function loadProducts() {
+      const res = await fetch('/api/products');
+      const products = await res.json();
+      const list = document.getElementById('product-list');
+      list.innerHTML = '';
+      for (const product of products) {
+        const li = document.createElement('li');
+        li.textContent = `${product.name} — $${product.price} `;
+        const button = document.createElement('button');
+        button.textContent = 'Add to cart';
+        button.id = `add-to-cart-${product.id}`;
+        button.addEventListener('click', async () => {
+          const addRes = await fetch('/api/cart/items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId: product.id }),
+          });
+          document.getElementById('message').textContent = addRes.ok
+            ? `Added ${product.name} to cart.`
+            : 'Could not add to cart — are you logged in?';
+        });
+        li.appendChild(button);
+        list.appendChild(li);
+      }
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    loadProducts();
+  </script>
+</body>
+</html>

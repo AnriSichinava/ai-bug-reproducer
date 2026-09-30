@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login — Demo Cart App</title>
+</head>
+<body>
+  <h1>Login</h1>
+  <form id="login-form">
+    <label>Email <input id="email" name="email" type="email" required /></label>
+    <label>Password <input id="password" name="password" type="password" required /></label>
+    <button id="login-btn" type="submit">Login</button>
+  </form>
+  <p id="error" style="color: red;"></p>
+  <p>No account? <a href="/register.html">Register</a></p>
+
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (res.ok) {
+        window.location.href = '/products.html';
+      } else {
+        const body = await res.json();
+        document.getElementById('error').textContent = body.error;
+      }
+    });
+  </script>
+</body>
+</html>
