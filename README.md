@@ -25,7 +25,7 @@ executes the generated regression tests.
 
 ## Status
 
-Milestone 0 in progress. Done: ASP.NET Core Web API with Swagger UI, EF Core + SQL Server (Azure SQL Edge locally, for arm64 compatibility) with a `User` entity and initial migration, JWT auth (register/login/protected endpoint), Docker Compose for `api` + `sql-server`. Remaining: `Project`/`BugReport` entities, CRUD endpoints, xUnit tests.
+**Milestone 0 complete.** ASP.NET Core Web API with Swagger UI, EF Core + SQL Server (Azure SQL Edge locally, for arm64 compatibility), JWT auth, `User`/`Project`/`BugReport` entities with owner-scoped CRUD endpoints, Docker Compose, and 15 xUnit integration tests. Milestone 1 (`AgentRun`/`AgentStep`) is next.
 
 ### Running locally
 
@@ -37,6 +37,12 @@ ASPNETCORE_ENVIRONMENT=Development dotnet ef database update
 ```
 
 Swagger UI: http://localhost:5199/swagger
+
+Tests (no database or containers required — they run against SQLite in-memory):
+
+```bash
+dotnet test
+```
 
 ## Milestones
 
