@@ -1,4 +1,6 @@
+using BugReproducer.Agent;
 using BugReproducer.Api.Data;
+using BugReproducer.Tests.Agent;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -48,6 +50,11 @@ public class TestApiFactory : WebApplicationFactory<Program>
             // factory owns a single connection shared by every scoped DbContext.
             _connection.Open();
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection));
+
+            // The real runner shells out to `npx playwright test`; default tests must
+            // not depend on that (or on the e2e/ directory even existing at test time).
+            services.RemoveAll<IPlaywrightTestRunner>();
+            services.AddSingleton<IPlaywrightTestRunner>(new FakePlaywrightTestRunner());
         });
     }
 

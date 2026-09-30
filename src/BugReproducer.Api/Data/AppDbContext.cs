@@ -10,6 +10,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BugReport> BugReports => Set<BugReport>();
     public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
     public DbSet<AgentStep> AgentSteps => Set<AgentStep>();
+    public DbSet<GeneratedTest> GeneratedTests => Set<GeneratedTest>();
+    public DbSet<TestRun> TestRuns => Set<TestRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,5 +53,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             step.HasIndex(s => new { s.AgentRunId, s.StepNumber }).IsUnique();
         });
+
+        modelBuilder.Entity<GeneratedTest>()
+            .HasOne(g => g.AgentRun)
+            .WithMany()
+            .HasForeignKey(g => g.AgentRunId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TestRun>()
+            .HasOne(t => t.GeneratedTest)
+            .WithMany(g => g.TestRuns)
+            .HasForeignKey(t => t.GeneratedTestId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

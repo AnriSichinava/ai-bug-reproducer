@@ -1,3 +1,4 @@
+using BugReproducer.Agent;
 using BugReproducer.Api.Auth;
 using BugReproducer.Api.Data;
 using BugReproducer.Api.Models;
@@ -44,6 +45,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.ConfigureOptions<ConfigureJwtBearerOptions>();
 builder.Services.AddAuthorization();
 
+builder.Services.AddSingleton<IPlaywrightTestRunner>(_ =>
+{
+    var configuredPath = builder.Configuration["E2eDirectory"];
+    var e2eDirectory = string.IsNullOrWhiteSpace(configuredPath)
+        ? FindE2eDirectory(builder.Environment.ContentRootPath)
+        : configuredPath;
+    return new PlaywrightTestRunner(e2eDirectory);
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -64,4 +74,22 @@ app.Run();
 
 // Top-level statements compile into an internal Program class; WebApplicationFactory<T>
 // needs it to be accessible, so expose it explicitly for the integration tests.
-public partial class Program;
+public partial class Program
+{
+    /// Only works when the API runs with the repo checked out on disk (e.g. `dotnet
+    /// run` from source) -- inside the api container this directory isn't mounted, so
+    /// test generation is a host-only dev feature for now, not something the
+    /// containerized deployment supports.
+    private static string FindE2eDirectory(string startPath)
+    {
+        var dir = new DirectoryInfo(startPath);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "e2e")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir is null
+            ? throw new InvalidOperationException("Could not locate the e2e directory from the content root.")
+            : Path.Combine(dir.FullName, "e2e");
+    }
+}

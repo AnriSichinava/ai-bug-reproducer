@@ -63,6 +63,15 @@ public class FakeBrowserTools : IBrowserTools
     }
 }
 
+/// Reports every test as passing without touching Node, Playwright, or the filesystem.
+/// Used wherever a test only needs the generate-and-persist flow to work, not a real
+/// test execution (that's what the gated McpWiringTests-style tests are for).
+public class FakePlaywrightTestRunner : IPlaywrightTestRunner
+{
+    public Task<TestExecutionResult> RunAsync(GeneratedTestSource test, CancellationToken cancellationToken = default)
+        => Task.FromResult(new TestExecutionResult(true, "fake runner: not actually executed"));
+}
+
 public class CollectingStepSink : IAgentStepSink
 {
     public List<AgentStepRecord> Steps { get; } = [];

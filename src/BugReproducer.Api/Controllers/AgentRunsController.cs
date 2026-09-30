@@ -1,6 +1,8 @@
+using AgentLib = BugReproducer.Agent;
 using BugReproducer.Api.Auth;
 using BugReproducer.Api.Data;
 using BugReproducer.Api.Dtos;
+using BugReproducer.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +12,7 @@ namespace BugReproducer.Api.Controllers;
 [ApiController]
 [Route("api/agent-runs")]
 [Authorize]
-public class AgentRunsController(AppDbContext db) : ControllerBase
+public class AgentRunsController(AppDbContext db, AgentLib.IPlaywrightTestRunner testRunner) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResult<AgentRunResponse>>> GetAgentRuns(
@@ -63,5 +65,62 @@ public class AgentRunsController(AppDbContext db) : ControllerBase
         }
 
         return Ok(run);
+    }
+
+    /// Generates a Playwright regression test from this run's recorded trace and
+    /// immediately executes it. Only valid for a run that concluded REPRODUCED --
+    /// generating a test from a run that never confirmed the bug would have nothing
+    /// real to encode.
+    [HttpPost("{id:int}/generate-test")]
+    public async Task<ActionResult<GenerateTestResponse>> GenerateTest(int id, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        var run = await db.AgentRuns
+            .Include(r => r.BugReport)
+            .Include(r => r.Steps)
+            .Where(r => r.Id == id && r.BugReport!.Project!.OwnerId == userId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (run is null)
+        {
+            return NotFound();
+        }
+
+        if (run.Verdict != ReproductionVerdict.Reproduced)
+        {
+            return Conflict("A regression test can only be generated for a run that concluded REPRODUCED.");
+        }
+
+        var bugContext = new AgentLib.BugReportContext(run.BugReport!.Title, run.BugReport.Description);
+        var stepRecords = run.Steps
+            .OrderBy(s => s.StepNumber)
+            .Select(s => new AgentLib.AgentStepRecord(
+                s.StepNumber, s.Reasoning, s.ToolName, s.ToolInputJson, s.ToolOutputJson, s.ToolErrorMessage))
+            .ToList();
+
+        var source = AgentLib.PlaywrightTestGenerator.Generate(bugContext, stepRecords);
+        var execution = await testRunner.RunAsync(source, cancellationToken);
+
+        var generatedTest = new GeneratedTest
+        {
+            AgentRunId = run.Id,
+            FileName = source.FileName,
+            SourceCode = source.SourceCode,
+        };
+        db.GeneratedTests.Add(generatedTest);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var testRun = new TestRun
+        {
+            GeneratedTestId = generatedTest.Id,
+            Passed = execution.Passed,
+            Output = execution.Output,
+        };
+        db.TestRuns.Add(testRun);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Ok(new GenerateTestResponse(
+            generatedTest.Id, generatedTest.FileName, generatedTest.SourceCode,
+            testRun.Id, testRun.Passed, testRun.Output));
     }
 }

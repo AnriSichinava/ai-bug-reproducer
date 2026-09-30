@@ -133,6 +133,35 @@ namespace BugReproducer.Api.Migrations
                     b.ToTable("BugReports");
                 });
 
+            modelBuilder.Entity("BugReproducer.Api.Models.GeneratedTest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgentRunId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentRunId");
+
+                    b.ToTable("GeneratedTests");
+                });
+
             modelBuilder.Entity("BugReproducer.Api.Models.Project", b =>
                 {
                     b.Property<int>("Id")
@@ -156,6 +185,34 @@ namespace BugReproducer.Api.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("Projects");
+                });
+
+            modelBuilder.Entity("BugReproducer.Api.Models.TestRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("GeneratedTestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Output")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Passed")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("RanAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GeneratedTestId");
+
+                    b.ToTable("TestRuns");
                 });
 
             modelBuilder.Entity("BugReproducer.Api.Models.User", b =>
@@ -218,6 +275,17 @@ namespace BugReproducer.Api.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("BugReproducer.Api.Models.GeneratedTest", b =>
+                {
+                    b.HasOne("BugReproducer.Api.Models.AgentRun", "AgentRun")
+                        .WithMany()
+                        .HasForeignKey("AgentRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AgentRun");
+                });
+
             modelBuilder.Entity("BugReproducer.Api.Models.Project", b =>
                 {
                     b.HasOne("BugReproducer.Api.Models.User", "Owner")
@@ -229,9 +297,25 @@ namespace BugReproducer.Api.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("BugReproducer.Api.Models.TestRun", b =>
+                {
+                    b.HasOne("BugReproducer.Api.Models.GeneratedTest", "GeneratedTest")
+                        .WithMany("TestRuns")
+                        .HasForeignKey("GeneratedTestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GeneratedTest");
+                });
+
             modelBuilder.Entity("BugReproducer.Api.Models.AgentRun", b =>
                 {
                     b.Navigation("Steps");
+                });
+
+            modelBuilder.Entity("BugReproducer.Api.Models.GeneratedTest", b =>
+                {
+                    b.Navigation("TestRuns");
                 });
 
             modelBuilder.Entity("BugReproducer.Api.Models.Project", b =>
