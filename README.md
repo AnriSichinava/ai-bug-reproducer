@@ -25,7 +25,11 @@ executes the generated regression tests.
 
 ## Status
 
-**Milestones 0-1 complete.** ASP.NET Core Web API with Swagger UI, EF Core + SQL Server (Azure SQL Edge locally, for arm64 compatibility), JWT auth, `User`/`Project`/`BugReport`/`AgentRun`/`AgentStep` entities with owner-scoped CRUD, `POST /api/bugs/{id}/reproduce` (creates a Pending run, no LLM yet), Docker Compose, and 21 xUnit integration tests. Milestone 2 (MCP server + hardcoded non-LLM agent loop) is next.
+**Milestones 0-1 complete**, plus the target app. ASP.NET Core Web API with Swagger UI, EF Core + SQL Server (Azure SQL Edge locally, for arm64 compatibility), JWT auth, `User`/`Project`/`BugReport`/`AgentRun`/`AgentStep` entities with owner-scoped CRUD, `POST /api/bugs/{id}/reproduce` (creates a Pending run, no LLM yet), Docker Compose, and 21 xUnit integration tests.
+
+`target-app/` is a minimal, deliberately buggy demo cart app (Express, in-memory, no framework) written for this project rather than adapted from an existing one — see its own comments for the bug. Reproduces a real cart-removal crash after logout/login, matching the project's original example almost exactly.
+
+Milestone 2 (MCP server + hardcoded non-LLM agent loop against `target-app`) is next.
 
 ### Running locally
 
