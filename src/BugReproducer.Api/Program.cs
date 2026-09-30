@@ -1,11 +1,9 @@
-using System.Text;
 using BugReproducer.Api.Auth;
 using BugReproducer.Api.Data;
 using BugReproducer.Api.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,9 +13,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
-    ?? throw new InvalidOperationException("Jwt configuration section is missing.");
-builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection("Jwt"))
+    .ValidateOnStart();
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -42,24 +40,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<PasswordHasher<User>>();
 builder.Services.AddSingleton<TokenService>();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        // Without this, the handler remaps short claim names ("sub", "email") to long
-        // ClaimTypes URIs, so JwtRegisteredClaimNames.Sub lookups fail after validation.
-        options.MapInboundClaims = false;
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = jwtOptions.Issuer,
-            ValidateAudience = true,
-            ValidAudience = jwtOptions.Audience,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromSeconds(30),
-        };
-    });
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+builder.Services.ConfigureOptions<ConfigureJwtBearerOptions>();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -79,3 +61,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Top-level statements compile into an internal Program class; WebApplicationFactory<T>
+// needs it to be accessible, so expose it explicitly for the integration tests.
+public partial class Program;
