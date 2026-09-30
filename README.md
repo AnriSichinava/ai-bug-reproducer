@@ -29,7 +29,26 @@ executes the generated regression tests.
 
 `target-app/` is a minimal, deliberately buggy demo cart app (Express, in-memory, no framework) written for this project rather than adapted from an existing one — see its own comments for the bug. Reproduces a real cart-removal crash after logout/login, matching the project's original example almost exactly.
 
-**Milestone 2 in progress.** `mcp-tools/` is a TypeScript MCP server (`@modelcontextprotocol/server`) wrapping Playwright with 3 tools so far: `navigate`, `click`, `get_console_errors`. `BugReproducer.Agent` is a plain C# library holding `BrowserToolsClient`, an MCP client (`ModelContextProtocol` NuGet package) that talks to it over stdio — this is the only path from the agent to a browser; there's no raw Playwright or shell access anywhere above it. A gated xUnit test (`Category=RequiresBrowserAndTargetApp`) proves the full C# → MCP → Playwright → real browser → target-app round trip works, without the default `dotnet test` run depending on Docker or Node. Still to do: the real (non-hardcoded) agent loop is Milestone 3.
+**Milestones 2–3 complete.** `mcp-tools/` is a TypeScript MCP server (`@modelcontextprotocol/server`) wrapping Playwright with 8 tools: `navigate`, `click`, `fill`, `get_page_snapshot`, `get_console_errors`, `get_network_log`, `take_screenshot`, `execute_api_request`. `BugReproducer.Agent` holds `ReproductionAgent` — the agent loop — plus `BrowserToolsClient`, an MCP client talking to that server over stdio. This is the only path from the agent to a browser; there is no raw Playwright or shell access anywhere above it.
+
+### How the agent loop works
+
+The loop is written out rather than delegated to an automatic tool-invocation helper, because owning it is what makes the rest possible: recording every step as it happens, enforcing a step budget, and ending the run on an explicit signal.
+
+- A run ends only when the model calls the **`conclude`** tool, so the verdict arrives structured and "the model went quiet" is never mistaken for "the model reached a conclusion".
+- **Observed fact and inference are separated structurally.** Evidence must cite the step number whose tool output it describes; the loop checks each citation against the steps that actually ran, and anything citing a step that never happened is returned separately as `UnverifiableEvidence` rather than presented as a finding.
+- `NOT_REPRODUCED` requires having actually performed the steps. Being unable to test something is `INCONCLUSIVE` — reporting a bug as "not reproduced" when the agent never got there would be the most damaging possible output.
+- Two seams (`IMessagesClient`, `IBrowserTools`) keep the loop deterministic and testable: the agent knows about *named tools*, not about MCP or Playwright, and the model is scripted in tests.
+
+### Running a real reproduction
+
+The loop needs an Anthropic API key (it defaults to `claude-opus-5`, configurable via `AgentOptions.Model`):
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Milestone 4 (recording the trace into a generated Playwright regression test) is next.
 
 ### Running locally
 
