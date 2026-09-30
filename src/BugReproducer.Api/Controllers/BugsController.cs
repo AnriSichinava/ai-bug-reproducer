@@ -2,16 +2,18 @@ using BugReproducer.Api.Auth;
 using BugReproducer.Api.Data;
 using BugReproducer.Api.Dtos;
 using BugReproducer.Api.Models;
+using BugReproducer.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BugReproducer.Api.Controllers;
 
 [ApiController]
 [Route("api/bugs")]
 [Authorize]
-public class BugsController(AppDbContext db) : ControllerBase
+public class BugsController(AppDbContext db, IBackgroundTaskQueue taskQueue) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResult<BugReportResponse>>> GetBugs(
@@ -101,6 +103,14 @@ public class BugsController(AppDbContext db) : ControllerBase
         var run = new AgentRun { BugReportId = id };
         db.AgentRuns.Add(run);
         await db.SaveChangesAsync();
+
+        // The 202 below is returned before this ever runs -- the caller polls
+        // GET /api/agent-runs/{id} for progress, it doesn't wait on this request.
+        await taskQueue.QueueAsync(async (services, ct) =>
+        {
+            var executor = services.GetRequiredService<AgentRunExecutor>();
+            await executor.ExecuteAsync(run.Id, ct);
+        });
 
         var response = new AgentRunResponse(
             run.Id, run.BugReportId, run.Status, run.Verdict, run.VerdictReason,

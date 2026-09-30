@@ -16,7 +16,21 @@ namespace BugReproducer.Tests;
 /// Boots the real API in-memory, backed by a private SQLite database per factory instance.
 public class TestApiFactory : WebApplicationFactory<Program>
 {
-    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    // A literal shared SqliteConnection object works for sequential access, but the
+    // background task queue now runs real work on its own thread concurrently with the
+    // test's HTTP calls, and two threads initializing the same connection object at once
+    // hits a native SQLite conflict ("unable to delete/modify user-function due to
+    // active statements"). A named shared-cache in-memory database lets every DbContext
+    // open its own connection while still pointing at the same in-memory data, which is
+    // the standard way to make EF Core SQLite in-memory tests safe under concurrency.
+    private readonly string _connectionString = $"DataSource=file:{Guid.NewGuid():N}?mode=memory&cache=shared";
+    private readonly SqliteConnection _keepAliveConnection;
+
+    public TestApiFactory()
+    {
+        _keepAliveConnection = new SqliteConnection(_connectionString);
+        _keepAliveConnection.Open();
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -46,15 +60,23 @@ public class TestApiFactory : WebApplicationFactory<Program>
             // providers end up configured on the same context.
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
 
-            // SQLite in-memory lives only as long as its connection is open, so the
-            // factory owns a single connection shared by every scoped DbContext.
-            _connection.Open();
-            services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection));
+            services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connectionString));
 
             // The real runner shells out to `npx playwright test`; default tests must
             // not depend on that (or on the e2e/ directory even existing at test time).
             services.RemoveAll<IPlaywrightTestRunner>();
             services.AddSingleton<IPlaywrightTestRunner>(new FakePlaywrightTestRunner());
+
+            // The real IMessagesClient/IBrowserTools would call the actual Anthropic API
+            // and spawn a real MCP/Playwright process. Route both through a holder tests
+            // can reconfigure (see TestAgentBackends); defaults to a client that never
+            // resolves, so unrelated tests' Pending/Running assertions aren't racing a
+            // background run that happens to finish first.
+            services.AddSingleton<TestAgentBackends>();
+            services.RemoveAll<IMessagesClient>();
+            services.AddScoped<IMessagesClient>(sp => sp.GetRequiredService<TestAgentBackends>().MessagesClient);
+            services.RemoveAll<IBrowserTools>();
+            services.AddScoped<IBrowserTools>(sp => sp.GetRequiredService<TestAgentBackends>().BrowserTools);
         });
     }
 
@@ -73,7 +95,7 @@ public class TestApiFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
         if (disposing)
         {
-            _connection.Dispose();
+            _keepAliveConnection.Dispose();
         }
     }
 }

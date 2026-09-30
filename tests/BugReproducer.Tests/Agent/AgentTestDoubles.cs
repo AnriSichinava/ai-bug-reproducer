@@ -22,6 +22,30 @@ public class ScriptedMessagesClient(params Message[] responses) : IMessagesClien
     }
 }
 
+/// Never completes until cancelled. This is the default IMessagesClient for the whole
+/// test host (see TestApiFactory): most tests only care that POST /reproduce enqueues
+/// work, not that it finishes, and a background run that actually completed near-
+/// instantly would race those tests' assertions about Pending/Running state. Tests that
+/// need a real conclusion set TestAgentBackends.MessagesClient to a ScriptedMessagesClient
+/// explicitly.
+public class NeverRespondingMessagesClient : IMessagesClient
+{
+    public Task<Message> CreateAsync(MessageCreateParams parameters, CancellationToken cancellationToken = default)
+    {
+        var tcs = new TaskCompletionSource<Message>(TaskCreationOptions.RunContinuationsAsynchronously);
+        cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+        return tcs.Task;
+    }
+}
+
+/// Lets individual tests swap in a fast, scripted IMessagesClient/IBrowserTools for the
+/// background reproduction flow without touching DI registration per test.
+public class TestAgentBackends
+{
+    public IMessagesClient MessagesClient { get; set; } = new NeverRespondingMessagesClient();
+    public IBrowserTools BrowserTools { get; set; } = new FakeBrowserTools();
+}
+
 public class FakeBrowserTools : IBrowserTools
 {
     private readonly Dictionary<string, ToolCallResult> _results = new();
