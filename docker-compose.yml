@@ -1,0 +1,28 @@
+services:
+  sql-server:
+    # mssql/server has no arm64 build; azure-sql-edge is arm64-native and speaks
+    # the same TDS protocol, so EF Core's SqlServer provider works unchanged.
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "DevPassword123!"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+
+  api:
+    build:
+      context: .
+      dockerfile: src/BugReproducer.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ConnectionStrings__Default: "Server=sql-server,1433;Database=BugReproducer;User Id=sa;Password=DevPassword123!;TrustServerCertificate=True;"
+      Jwt__Secret: "b9C1e55mcSivRA0HXplAp0k/IpqYAddf09YnjA/jMBhDeBk0E9nWMmvo07gdayIV"
+    ports:
+      - "5199:8080"
+    depends_on:
+      - sql-server
+
+volumes:
+  sql-data:
