@@ -45,6 +45,9 @@ builder.Services.AddSingleton<TokenService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Without this, the handler remaps short claim names ("sub", "email") to long
+        // ClaimTypes URIs, so JwtRegisteredClaimNames.Sub lookups fail after validation.
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
