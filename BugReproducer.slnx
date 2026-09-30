@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/BugReproducer.Agent/BugReproducer.Agent.csproj" />
     <Project Path="src/BugReproducer.Api/BugReproducer.Api.csproj" />
   </Folder>
   <Folder Name="/tests/">

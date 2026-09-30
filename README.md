@@ -29,7 +29,7 @@ executes the generated regression tests.
 
 `target-app/` is a minimal, deliberately buggy demo cart app (Express, in-memory, no framework) written for this project rather than adapted from an existing one — see its own comments for the bug. Reproduces a real cart-removal crash after logout/login, matching the project's original example almost exactly.
 
-Milestone 2 (MCP server + hardcoded non-LLM agent loop against `target-app`) is next.
+**Milestone 2 in progress.** `mcp-tools/` is a TypeScript MCP server (`@modelcontextprotocol/server`) wrapping Playwright with 3 tools so far: `navigate`, `click`, `get_console_errors`. `BugReproducer.Agent` is a plain C# library holding `BrowserToolsClient`, an MCP client (`ModelContextProtocol` NuGet package) that talks to it over stdio — this is the only path from the agent to a browser; there's no raw Playwright or shell access anywhere above it. A gated xUnit test (`Category=RequiresBrowserAndTargetApp`) proves the full C# → MCP → Playwright → real browser → target-app round trip works, without the default `dotnet test` run depending on Docker or Node. Still to do: the real (non-hardcoded) agent loop is Milestone 3.
 
 ### Running locally
 
@@ -45,7 +45,16 @@ Swagger UI: http://localhost:5199/swagger
 Tests (no database or containers required — they run against SQLite in-memory):
 
 ```bash
-dotnet test
+dotnet test --filter "Category!=RequiresBrowserAndTargetApp"
+```
+
+The `RequiresBrowserAndTargetApp` category is excluded by default because those tests
+drive a real browser against `target-app`. To run them too:
+
+```bash
+docker compose up -d target-app
+cd mcp-tools && npm install && npx playwright install chromium && npm run build && cd ..
+dotnet test --filter "Category=RequiresBrowserAndTargetApp"
 ```
 
 ## Milestones
