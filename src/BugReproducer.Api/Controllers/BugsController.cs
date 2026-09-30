@@ -77,4 +77,39 @@ public class BugsController(AppDbContext db) : ControllerBase
         var response = new BugReportResponse(bug.Id, bug.ProjectId, bug.Title, bug.Description, bug.CreatedAtUtc);
         return CreatedAtAction(nameof(GetBug), new { id = bug.Id }, response);
     }
+
+    /// Queues a reproduction attempt. The agent itself runs later and asynchronously,
+    /// so this returns 202 with a run the caller can poll, not the finished result.
+    [HttpPost("{id:int}/reproduce")]
+    public async Task<ActionResult<AgentRunResponse>> Reproduce(int id)
+    {
+        var userId = User.GetUserId();
+        var bugExists = await db.BugReports.AnyAsync(b => b.Id == id && b.Project!.OwnerId == userId);
+        if (!bugExists)
+        {
+            return NotFound();
+        }
+
+        var hasActiveRun = await db.AgentRuns.AnyAsync(r =>
+            r.BugReportId == id &&
+            (r.Status == AgentRunStatus.Pending || r.Status == AgentRunStatus.Running));
+        if (hasActiveRun)
+        {
+            return Conflict("A reproduction run for this bug is already in progress.");
+        }
+
+        var run = new AgentRun { BugReportId = id };
+        db.AgentRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var response = new AgentRunResponse(
+            run.Id, run.BugReportId, run.Status, run.Verdict, run.VerdictReason,
+            run.FailureReason, run.StartedAtUtc, run.CompletedAtUtc);
+
+        return AcceptedAtAction(
+            nameof(AgentRunsController.GetAgentRun),
+            "AgentRuns",
+            new { id = run.Id },
+            response);
+    }
 }

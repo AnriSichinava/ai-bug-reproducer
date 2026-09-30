@@ -8,6 +8,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<User> Users => Set<User>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<BugReport> BugReports => Set<BugReport>();
+    public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
+    public DbSet<AgentStep> AgentSteps => Set<AgentStep>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,5 +28,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany(p => p.BugReports)
             .HasForeignKey(b => b.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AgentRun>(run =>
+        {
+            run.HasOne(r => r.BugReport)
+                .WithMany()
+                .HasForeignKey(r => r.BugReportId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Stored as strings so the database stays readable and reordering the enum
+            // can't silently change the meaning of existing rows.
+            run.Property(r => r.Status).HasConversion<string>().HasMaxLength(32);
+            run.Property(r => r.Verdict).HasConversion<string>().HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<AgentStep>(step =>
+        {
+            step.HasOne(s => s.AgentRun)
+                .WithMany(r => r.Steps)
+                .HasForeignKey(s => s.AgentRunId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            step.HasIndex(s => new { s.AgentRunId, s.StepNumber }).IsUnique();
+        });
     }
 }

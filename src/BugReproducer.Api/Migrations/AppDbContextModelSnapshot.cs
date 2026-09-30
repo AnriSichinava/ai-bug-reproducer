@@ -22,6 +22,88 @@ namespace BugReproducer.Api.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("BugReproducer.Api.Models.AgentRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BugReportId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FailureReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Verdict")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("VerdictReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BugReportId");
+
+                    b.ToTable("AgentRuns");
+                });
+
+            modelBuilder.Entity("BugReproducer.Api.Models.AgentStep", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgentRunId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ArtifactPathsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reasoning")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("StepNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToolErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ToolInputJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ToolName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ToolOutputJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentRunId", "StepNumber")
+                        .IsUnique();
+
+                    b.ToTable("AgentSteps");
+                });
+
             modelBuilder.Entity("BugReproducer.Api.Models.BugReport", b =>
                 {
                     b.Property<int>("Id")
@@ -103,6 +185,28 @@ namespace BugReproducer.Api.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("BugReproducer.Api.Models.AgentRun", b =>
+                {
+                    b.HasOne("BugReproducer.Api.Models.BugReport", "BugReport")
+                        .WithMany()
+                        .HasForeignKey("BugReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BugReport");
+                });
+
+            modelBuilder.Entity("BugReproducer.Api.Models.AgentStep", b =>
+                {
+                    b.HasOne("BugReproducer.Api.Models.AgentRun", "AgentRun")
+                        .WithMany("Steps")
+                        .HasForeignKey("AgentRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AgentRun");
+                });
+
             modelBuilder.Entity("BugReproducer.Api.Models.BugReport", b =>
                 {
                     b.HasOne("BugReproducer.Api.Models.Project", "Project")
@@ -123,6 +227,11 @@ namespace BugReproducer.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("BugReproducer.Api.Models.AgentRun", b =>
+                {
+                    b.Navigation("Steps");
                 });
 
             modelBuilder.Entity("BugReproducer.Api.Models.Project", b =>
