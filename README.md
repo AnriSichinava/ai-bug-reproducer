@@ -38,9 +38,12 @@ but a product where clicking "Reproduce" does nothing isn't really a product).
   exactly — see its own comments for the root cause.
 - **Milestone 1** — `AgentRun`/`AgentStep` entities; `POST /api/bugs/{id}/reproduce`.
 - **Milestone 2** — `mcp-tools/`, a TypeScript MCP server (`@modelcontextprotocol/server`)
-  wrapping Playwright with 8 tools: `navigate`, `click`, `fill`, `get_page_snapshot`,
-  `get_console_errors`, `get_network_log`, `take_screenshot`, `execute_api_request`. This is
-  the *only* path from the agent to a browser — no raw Playwright or shell access anywhere
+  wrapping Playwright with 10 tools: `navigate`, `click`, `fill`, `get_page_snapshot`,
+  `get_console_errors`, `get_network_log`, `take_screenshot`, `execute_api_request`, plus
+  `read_source_file`/`search_code` (scoped to `target-app/`, path-traversal-safe — added
+  after the initial v1 trim, see "Possible next steps" below) for grounding in the
+  application's actual code, not just its observed behavior. This is the *only* path from
+  the agent to a browser or the filesystem — no raw Playwright or shell access anywhere
   above it.
 - **Milestone 3** — `ReproductionAgent`, the LLM-driven loop. See "How the agent loop works"
   below.
@@ -157,5 +160,5 @@ cd e2e && npx playwright test dashboard/
 
 - Containerize the agent pipeline itself (bundle `mcp-tools`/`e2e` + Node into the `api` image) so a real reproduction doesn't require running the API from source.
 - Wire the dashboard's e2e tests into CI (needs the API + migrations running there too, not just `target-app`).
-- `read_source_file`/`search_code`/OpenAPI-spec tools (deferred from Milestone 2 as v2 scope).
+- OpenAPI-spec reading tool (`read_source_file`/`search_code` are done — see Milestone 2).
 - Role system beyond the single owner check (deliberately out of scope for this project, see memory of the original design discussion).
