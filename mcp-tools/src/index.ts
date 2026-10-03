@@ -6,6 +6,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { chromium, type Browser, type Page } from "playwright";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import * as z from "zod/v4";
 
 const server = new McpServer({ name: "bug-reproducer-browser-tools", version: "1.0.0" });
@@ -13,6 +14,38 @@ const server = new McpServer({ name: "bug-reproducer-browser-tools", version: "1
 const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR ?? path.resolve("artifacts");
 const MAX_NETWORK_ENTRIES = 200;
 const MAX_TEXT_CHARS = 2000;
+
+// Resolved from this file's own location, not process.cwd() -- the C# agent spawns this
+// process from whatever directory it happens to run in, so cwd can't be trusted.
+// Defaults to target-app/ (the one app this project actually reproduces bugs against);
+// override with SOURCE_ROOT to point the agent at a different codebase.
+const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
+const SOURCE_ROOT = path.resolve(process.env.SOURCE_ROOT ?? path.join(THIS_DIR, "..", "..", "target-app"));
+const IGNORED_DIR_NAMES = new Set(["node_modules", ".git", "dist"]);
+const MAX_SEARCH_RESULTS = 50;
+
+/// Resolves a path the model supplied against SOURCE_ROOT and rejects anything that
+/// escapes it (`../../etc/passwd`, an absolute path elsewhere, a symlink out). The model
+/// gets read access to one specific application's source, not the host filesystem.
+function resolveWithinSourceRoot(relativePath: string): string {
+  const resolved = path.resolve(SOURCE_ROOT, relativePath);
+  if (resolved !== SOURCE_ROOT && !resolved.startsWith(SOURCE_ROOT + path.sep)) {
+    throw new Error(`Path escapes the source root: ${relativePath}`);
+  }
+  return resolved;
+}
+
+async function* walkSourceFiles(dir: string): AsyncGenerator<string> {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (IGNORED_DIR_NAMES.has(entry.name)) continue;
+      yield* walkSourceFiles(path.join(dir, entry.name));
+    } else if (entry.isFile()) {
+      yield path.join(dir, entry.name);
+    }
+  }
+}
 
 interface NetworkEntry {
   method: string;
@@ -223,6 +256,71 @@ server.registerTool(
       });
     } catch (error) {
       return toolError(`Request failed: ${(error as Error).message}`);
+    }
+  },
+);
+
+server.registerTool(
+  "read_source_file",
+  {
+    description:
+      "Read a file from the target application's own source code, by path relative to the " +
+      "application root (e.g. 'server.js'). Use this to check what the code actually does " +
+      "instead of inferring it from UI behaviour alone.",
+    inputSchema: z.object({
+      path: z.string().describe("File path relative to the application's source root"),
+    }),
+  },
+  async ({ path: relativePath }) => {
+    try {
+      const filePath = resolveWithinSourceRoot(relativePath);
+      const content = await fs.readFile(filePath, "utf-8");
+      return ok({ path: relativePath, content: content.slice(0, 10_000) });
+    } catch (error) {
+      return toolError(`Could not read "${relativePath}": ${(error as Error).message}`);
+    }
+  },
+);
+
+server.registerTool(
+  "search_code",
+  {
+    description:
+      "Search the target application's source code for a literal substring (case-insensitive) " +
+      "and return matching file paths with line numbers. Use this to locate the handler for a " +
+      "route or feature before reading the whole file.",
+    inputSchema: z.object({ query: z.string().describe("Substring to search for") }),
+  },
+  async ({ query }) => {
+    const needle = query.toLowerCase();
+    const matches: { path: string; line: number; text: string }[] = [];
+
+    try {
+      for await (const filePath of walkSourceFiles(SOURCE_ROOT)) {
+        if (matches.length >= MAX_SEARCH_RESULTS) break;
+
+        let content: string;
+        try {
+          content = await fs.readFile(filePath, "utf-8");
+        } catch {
+          continue; // binary or unreadable; skip rather than fail the whole search
+        }
+
+        const lines = content.split("\n");
+        for (let i = 0; i < lines.length && matches.length < MAX_SEARCH_RESULTS; i++) {
+          if (lines[i].toLowerCase().includes(needle)) {
+            matches.push({
+              path: path.relative(SOURCE_ROOT, filePath),
+              line: i + 1,
+              text: lines[i].trim().slice(0, 200),
+            });
+          }
+        }
+      }
+
+      return ok(matches);
+    } catch (error) {
+      return toolError(`Search failed: ${(error as Error).message}`);
     }
   },
 );

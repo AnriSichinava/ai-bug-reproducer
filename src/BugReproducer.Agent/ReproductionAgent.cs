@@ -332,6 +332,11 @@ public class ReproductionAgent(
         - When you reach the step that is supposed to fail, gather hard evidence: check
           get_network_log for failing requests and get_console_errors for script errors,
           and take a screenshot.
+        - If the application's source is available, use search_code and read_source_file to
+          check what a handler actually does rather than guessing from behavior alone.
+          Reading the code is evidence about intent, not a substitute for actually
+          performing the steps -- an explanation you found in the code is still inference
+          unless you also observed the behavior it describes.
         - You have a limited number of turns. Do not keep exploring once you can answer.
 
         Two things are kept strictly apart, and you must respect the difference:

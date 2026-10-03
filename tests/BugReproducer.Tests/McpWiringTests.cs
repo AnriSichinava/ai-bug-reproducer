@@ -22,8 +22,47 @@ public class McpWiringTests
 
         Assert.Equal(
             ["click", "execute_api_request", "fill", "get_console_errors", "get_network_log",
-             "get_page_snapshot", "navigate", "take_screenshot"],
+             "get_page_snapshot", "navigate", "read_source_file", "search_code", "take_screenshot"],
             names.Order());
+    }
+
+    [Fact]
+    public async Task ReadSourceFile_ReturnsTheTargetAppsActualSourceCode()
+    {
+        await using var tools = await BrowserToolsClient.ConnectAsync(McpToolsDistPath);
+
+        var result = await Call(tools, "read_source_file", new { path = "server.js" });
+
+        var content = JsonDocument.Parse(result).RootElement.GetProperty("content").GetString()!;
+        // This is the real bug's own comment, not a string we're asserting into existence --
+        // confirms the tool is reading the actual file, not fabricating a plausible answer.
+        Assert.Contains("THE BUG", content);
+        Assert.Contains("req.session.cart.items", content);
+    }
+
+    [Fact]
+    public async Task SearchCode_FindsTheHandlerForARoute()
+    {
+        await using var tools = await BrowserToolsClient.ConnectAsync(McpToolsDistPath);
+
+        var result = await Call(tools, "search_code", new { query = "/api/cart/items/:id" });
+
+        var matches = JsonDocument.Parse(result).RootElement.EnumerateArray().ToList();
+        Assert.Contains(matches, m => m.GetProperty("path").GetString() == "server.js");
+    }
+
+    [Fact]
+    public async Task ReadSourceFile_RejectsPathsThatEscapeTheSourceRoot()
+    {
+        await using var tools = await BrowserToolsClient.ConnectAsync(McpToolsDistPath);
+
+        var result = await tools.CallToolAsync("read_source_file", new Dictionary<string, object?>
+        {
+            ["path"] = "../../../../etc/passwd",
+        });
+
+        Assert.False(result.Success);
+        Assert.Contains("escapes the source root", result.Text);
     }
 
     [Fact]
