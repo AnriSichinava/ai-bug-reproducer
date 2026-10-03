@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore
+
+      - name: Unit + integration tests (no external dependencies)
+        run: dotnet test --no-build --filter "Category!=RequiresBrowserAndTargetApp"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build api image
+        run: docker build -f src/BugReproducer.Api/Dockerfile -t bug-reproducer-api .
+
+      - name: Build target-app image
+        run: docker build -t bug-reproducer-target-app ./target-app
+
+  mcp-tools-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: mcp-tools
+        run: npm ci
+
+      - name: Type-check / build
+        working-directory: mcp-tools
+        run: npm run build
+
+  browser-gated-tests:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, mcp-tools-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build mcp-tools
+        working-directory: mcp-tools
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Playwright browsers for mcp-tools
+        working-directory: mcp-tools
+        run: npx playwright install --with-deps chromium
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Start target-app
+        run: docker compose up -d target-app
+
+      - name: Wait for target-app
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/products.html > /dev/null && exit 0
+            sleep 1
+          done
+          echo "target-app did not become ready in time" >&2
+          exit 1
+
+      - name: Run gated tests (real MCP + Playwright + target-app)
+        run: dotnet test --filter "Category=RequiresBrowserAndTargetApp"
+
+      - name: Tear down
+        if: always()
+        run: docker compose down
