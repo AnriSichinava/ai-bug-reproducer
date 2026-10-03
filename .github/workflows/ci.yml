@@ -101,3 +101,79 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down
+
+  dashboard-e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, mcp-tools-build]
+    env:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Default: "Server=localhost,1433;Database=BugReproducer;User Id=sa;Password=DevPassword123!;TrustServerCertificate=True;"
+      Jwt__Secret: "ci-test-secret-key-that-is-long-enough-for-hmac-sha256"
+      TargetApp__BaseUrl: "http://localhost:4000"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Build mcp-tools
+        working-directory: mcp-tools
+        run: |
+          npm ci
+          npm run build
+
+      - name: Start sql-server and target-app
+        run: docker compose up -d sql-server target-app
+
+      - name: Wait for sql-server and apply migrations
+        working-directory: src/BugReproducer.Api
+        run: |
+          for i in $(seq 1 60); do
+            if ~/.dotnet/tools/dotnet-ef database update 2>&1 | tee /tmp/ef.log; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/ef.log
+          echo "sql-server did not become ready in time" >&2
+          exit 1
+
+      - name: Start the API from source
+        working-directory: src/BugReproducer.Api
+        run: |
+          nohup dotnet run --urls http://localhost:5199 > /tmp/api.log 2>&1 &
+          # A cold runner has to restore+build Api and Agent from scratch here, so this
+          # is more generous than the equivalent local wait.
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5199/login.html > /dev/null && exit 0
+            sleep 2
+          done
+          echo "API did not become ready in time" >&2
+          cat /tmp/api.log
+          exit 1
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run dashboard e2e tests
+        working-directory: e2e
+        run: npx playwright test dashboard/
+
+      - name: Show API log on failure
+        if: failure()
+        run: cat /tmp/api.log
+
+      - name: Tear down
+        if: always()
+        run: docker compose down
