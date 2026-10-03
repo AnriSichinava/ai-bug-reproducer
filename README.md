@@ -159,6 +159,5 @@ cd e2e && npx playwright test dashboard/
 ### Possible next steps (not started)
 
 - Containerize the agent pipeline itself (bundle `mcp-tools`/`e2e` + Node into the `api` image) so a real reproduction doesn't require running the API from source.
-- Wire the dashboard's e2e tests into CI (needs the API + migrations running there too, not just `target-app`).
 - OpenAPI-spec reading tool (`read_source_file`/`search_code` are done — see Milestone 2).
 - Role system beyond the single owner check (deliberately out of scope for this project, see memory of the original design discussion).
