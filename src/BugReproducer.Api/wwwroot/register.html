@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Register — AI Bug Reproducer</title>
+</head>
+<body>
+  <h1>Register</h1>
+  <form id="register-form">
+    <label>Email <input id="email" type="email" required /></label>
+    <label>Password <input id="password" type="password" required /></label>
+    <button id="register-btn" type="submit">Register</button>
+  </form>
+  <p id="error" style="color: red;"></p>
+  <p>Already have an account? <a href="/login.html">Log in</a></p>
+
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const body = await response.json();
+      if (response.ok) {
+        localStorage.setItem('token', body.token);
+        window.location.href = '/dashboard.html';
+      } else {
+        document.getElementById('error').textContent = typeof body === 'string' ? body : (body.errors ? JSON.stringify(body.errors) : 'Registration failed.');
+      }
+    });
+  </script>
+</body>
+</html>

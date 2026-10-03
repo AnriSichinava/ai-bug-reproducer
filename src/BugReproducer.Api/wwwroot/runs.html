@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Agent Runs — AI Bug Reproducer</title>
+</head>
+<body>
+  <nav>
+    <a href="/dashboard.html">Dashboard</a> |
+    <button id="logout-btn">Logout</button>
+  </nav>
+
+  <h1>Agent Runs</h1>
+  <ul id="run-list"></ul>
+
+  <script src="/app.js"></script>
+  <script>
+    requireAuth();
+
+    const bugId = new URLSearchParams(window.location.search).get('bugId');
+
+    async function loadRuns() {
+      const res = await api(`/api/agent-runs?bugId=${bugId}&pageSize=100`);
+      const page = await res.json();
+      const list = document.getElementById('run-list');
+      list.innerHTML = '';
+      for (const run of page.items) {
+        const li = document.createElement('li');
+        li.id = `run-${run.id}`;
+        const link = document.createElement('a');
+        link.href = `/run.html?id=${run.id}`;
+        link.textContent = `Run #${run.id} — ${run.status}${run.verdict ? ' — ' + run.verdict : ''}`;
+        li.appendChild(link);
+        list.appendChild(li);
+      }
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', logout);
+
+    loadRuns();
+  </script>
+</body>
+</html>

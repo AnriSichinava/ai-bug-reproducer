@@ -98,6 +98,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Serves the minimal dashboard (wwwroot/) -- a static-file frontend hosted by the same
+// API, so there's no separate frontend build/deploy or CORS setup to maintain.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 

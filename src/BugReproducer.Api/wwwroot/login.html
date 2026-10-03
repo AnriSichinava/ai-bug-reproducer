@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login — AI Bug Reproducer</title>
+</head>
+<body>
+  <h1>Login</h1>
+  <form id="login-form">
+    <label>Email <input id="email" type="email" required /></label>
+    <label>Password <input id="password" type="password" required /></label>
+    <button id="login-btn" type="submit">Login</button>
+  </form>
+  <p id="error" style="color: red;"></p>
+  <p>No account? <a href="/register.html">Register</a></p>
+
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const body = await response.json();
+      if (response.ok) {
+        localStorage.setItem('token', body.token);
+        window.location.href = '/dashboard.html';
+      } else {
+        document.getElementById('error').textContent = typeof body === 'string' ? body : 'Invalid email or password.';
+      }
+    });
+  </script>
+</body>
+</html>

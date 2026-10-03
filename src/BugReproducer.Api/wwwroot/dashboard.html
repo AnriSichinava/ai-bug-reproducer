@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard — AI Bug Reproducer</title>
+</head>
+<body>
+  <nav>
+    <strong>AI Bug Reproducer</strong> |
+    <button id="logout-btn">Logout</button>
+  </nav>
+
+  <section>
+    <h2>New Project</h2>
+    <form id="new-project-form">
+      <input id="project-name" placeholder="Project name" required />
+      <button id="create-project-btn" type="submit">Create</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Projects</h2>
+    <ul id="project-list"></ul>
+  </section>
+
+  <section id="bugs-section" style="display: none;">
+    <h2>Bug Reports for <span id="selected-project-name"></span></h2>
+    <form id="new-bug-form">
+      <input id="bug-title" placeholder="Short title" required />
+      <textarea id="bug-description" placeholder="Describe the bug: steps to reproduce, expected vs actual behavior" required></textarea>
+      <button id="create-bug-btn" type="submit">Submit Bug Report</button>
+    </form>
+    <ul id="bug-list"></ul>
+  </section>
+
+  <p id="message" role="status"></p>
+
+  <script src="/app.js"></script>
+  <script>
+    requireAuth();
+
+    let selectedProjectId = null;
+
+    async function loadProjects() {
+      const res = await api('/api/projects?pageSize=100');
+      const page = await res.json();
+      const list = document.getElementById('project-list');
+      list.innerHTML = '';
+      for (const project of page.items) {
+        const li = document.createElement('li');
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = project.name;
+        link.id = `select-project-${project.id}`;
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          selectProject(project.id, project.name);
+        });
+        li.appendChild(link);
+        list.appendChild(li);
+      }
+    }
+
+    function selectProject(id, name) {
+      selectedProjectId = id;
+      document.getElementById('selected-project-name').textContent = name;
+      document.getElementById('bugs-section').style.display = 'block';
+      loadBugs();
+    }
+
+    async function loadBugs() {
+      const res = await api(`/api/bugs?projectId=${selectedProjectId}&pageSize=100`);
+      const page = await res.json();
+      const list = document.getElementById('bug-list');
+      list.innerHTML = '';
+      for (const bug of page.items) {
+        const li = document.createElement('li');
+        li.id = `bug-${bug.id}`;
+
+        const title = document.createElement('span');
+        title.textContent = `${bug.title} — `;
+        li.appendChild(title);
+
+        const reproduceBtn = document.createElement('button');
+        reproduceBtn.textContent = 'Reproduce';
+        reproduceBtn.id = `reproduce-${bug.id}`;
+        reproduceBtn.addEventListener('click', async () => {
+          const reproRes = await api(`/api/bugs/${bug.id}/reproduce`, { method: 'POST' });
+          const body = await reproRes.json();
+          const messageEl = document.getElementById('message');
+          if (reproRes.ok) {
+            window.location.href = `/run.html?id=${body.id}`;
+          } else {
+            messageEl.textContent = typeof body === 'string' ? body : 'Could not start a reproduction run.';
+          }
+        });
+        li.appendChild(reproduceBtn);
+
+        const runsLink = document.createElement('a');
+        runsLink.href = `/runs.html?bugId=${bug.id}`;
+        runsLink.textContent = 'View runs';
+        runsLink.style.marginLeft = '0.5em';
+        li.appendChild(runsLink);
+
+        list.appendChild(li);
+      }
+    }
+
+    document.getElementById('new-project-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('project-name').value;
+      const res = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name }) });
+      if (res.ok) {
+        document.getElementById('project-name').value = '';
+        await loadProjects();
+      } else {
+        document.getElementById('message').textContent = 'Could not create project.';
+      }
+    });
+
+    document.getElementById('new-bug-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('bug-title').value;
+      const description = document.getElementById('bug-description').value;
+      const res = await api('/api/bugs', {
+        method: 'POST',
+        body: JSON.stringify({ projectId: selectedProjectId, title, description }),
+      });
+      if (res.ok) {
+        document.getElementById('bug-title').value = '';
+        document.getElementById('bug-description').value = '';
+        await loadBugs();
+      } else {
+        document.getElementById('message').textContent = 'Could not submit bug report.';
+      }
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', logout);
+
+    loadProjects();
+  </script>
+</body>
+</html>

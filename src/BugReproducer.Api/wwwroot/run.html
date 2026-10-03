@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Agent Run — AI Bug Reproducer</title>
+</head>
+<body>
+  <nav>
+    <a href="/dashboard.html">Dashboard</a> |
+    <button id="logout-btn">Logout</button>
+  </nav>
+
+  <h1>Agent Run #<span id="run-id"></span></h1>
+  <p>Status: <strong id="run-status">loading…</strong></p>
+  <p id="verdict-line" style="display: none;">Verdict: <strong id="run-verdict"></strong> — <span id="run-verdict-reason"></span></p>
+  <p id="failure-line" style="display: none; color: red;">Failure: <span id="run-failure-reason"></span></p>
+
+  <button id="generate-test-btn" style="display: none;">Generate Regression Test</button>
+  <div id="test-result" style="display: none;">
+    <p>Test file: <code id="test-file-name"></code> — result: <strong id="test-passed"></strong></p>
+    <pre id="test-source"></pre>
+  </div>
+
+  <h2>Steps</h2>
+  <table id="steps-table" border="1" cellpadding="4">
+    <thead>
+      <tr><th>#</th><th>Reasoning</th><th>Tool</th><th>Output / Error</th></tr>
+    </thead>
+    <tbody id="steps-body"></tbody>
+  </table>
+
+  <script src="/app.js"></script>
+  <script>
+    requireAuth();
+
+    const runId = new URLSearchParams(window.location.search).get('id');
+    document.getElementById('run-id').textContent = runId;
+
+    let pollHandle = null;
+
+    function renderSteps(steps) {
+      const body = document.getElementById('steps-body');
+      body.innerHTML = '';
+      for (const step of steps) {
+        const row = document.createElement('tr');
+        row.id = `step-${step.stepNumber}`;
+        const outputOrError = step.toolErrorMessage ?? step.toolOutputJson ?? '';
+        row.innerHTML = `<td>${step.stepNumber}</td><td>${step.reasoning ?? ''}</td><td>${step.toolName ?? ''}</td><td><code>${escapeHtml(outputOrError)}</code></td>`;
+        body.appendChild(row);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function refresh() {
+      const res = await api(`/api/agent-runs/${runId}`);
+      if (!res.ok) {
+        document.getElementById('run-status').textContent = 'not found';
+        return;
+      }
+
+      const run = await res.json();
+      document.getElementById('run-status').textContent = run.status;
+      renderSteps(run.steps);
+
+      if (run.verdict) {
+        document.getElementById('verdict-line').style.display = 'block';
+        document.getElementById('run-verdict').textContent = run.verdict;
+        document.getElementById('run-verdict-reason').textContent = run.verdictReason ?? '';
+      }
+
+      if (run.status === 'Failed' && run.failureReason) {
+        document.getElementById('failure-line').style.display = 'block';
+        document.getElementById('run-failure-reason').textContent = run.failureReason;
+      }
+
+      if (run.verdict === 'Reproduced') {
+        document.getElementById('generate-test-btn').style.display = 'inline-block';
+      }
+
+      if (run.status === 'Completed' || run.status === 'Failed') {
+        if (pollHandle) {
+          clearInterval(pollHandle);
+          pollHandle = null;
+        }
+      }
+    }
+
+    document.getElementById('generate-test-btn').addEventListener('click', async () => {
+      const res = await api(`/api/agent-runs/${runId}/generate-test`, { method: 'POST' });
+      const body = await res.json();
+      if (res.ok) {
+        document.getElementById('test-result').style.display = 'block';
+        document.getElementById('test-file-name').textContent = body.fileName;
+        document.getElementById('test-passed').textContent = body.passed ? 'PASSED' : 'FAILED';
+        document.getElementById('test-source').textContent = body.sourceCode;
+      }
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', logout);
+
+    refresh();
+    pollHandle = setInterval(refresh, 1000);
+  </script>
+</body>
+</html>
