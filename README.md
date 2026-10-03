@@ -25,11 +25,33 @@ executes the generated regression tests.
 
 ## Status
 
-**Milestones 0-1 complete**, plus the target app. ASP.NET Core Web API with Swagger UI, EF Core + SQL Server (Azure SQL Edge locally, for arm64 compatibility), JWT auth, `User`/`Project`/`BugReport`/`AgentRun`/`AgentStep` entities with owner-scoped CRUD, `POST /api/bugs/{id}/reproduce` (creates a Pending run, no LLM yet), Docker Compose, and 21 xUnit integration tests.
+**All five planned milestones are complete**, plus one thing beyond the original plan: the
+reproduce endpoint actually *runs* the agent now (originally scoped as a later nice-to-have,
+but a product where clicking "Reproduce" does nothing isn't really a product).
 
-`target-app/` is a minimal, deliberately buggy demo cart app (Express, in-memory, no framework) written for this project rather than adapted from an existing one — see its own comments for the bug. Reproduces a real cart-removal crash after logout/login, matching the project's original example almost exactly.
-
-**Milestones 2–3 complete.** `mcp-tools/` is a TypeScript MCP server (`@modelcontextprotocol/server`) wrapping Playwright with 8 tools: `navigate`, `click`, `fill`, `get_page_snapshot`, `get_console_errors`, `get_network_log`, `take_screenshot`, `execute_api_request`. `BugReproducer.Agent` holds `ReproductionAgent` — the agent loop — plus `BrowserToolsClient`, an MCP client talking to that server over stdio. This is the only path from the agent to a browser; there is no raw Playwright or shell access anywhere above it.
+- **Milestone 0** — ASP.NET Core Web API, Swagger UI with JWT auth wired in, EF Core + SQL
+  Server (Azure SQL Edge locally, for Apple Silicon compatibility), `User`/`Project`/`BugReport`
+  entities with owner-scoped CRUD, Docker Compose.
+- **`target-app/`** — a minimal, deliberately buggy demo cart app (Express, in-memory, no
+  framework) written for this project rather than adapted from an existing one. Reproduces a
+  real cart-removal crash after logout/login, matching the project's original spec almost
+  exactly — see its own comments for the root cause.
+- **Milestone 1** — `AgentRun`/`AgentStep` entities; `POST /api/bugs/{id}/reproduce`.
+- **Milestone 2** — `mcp-tools/`, a TypeScript MCP server (`@modelcontextprotocol/server`)
+  wrapping Playwright with 8 tools: `navigate`, `click`, `fill`, `get_page_snapshot`,
+  `get_console_errors`, `get_network_log`, `take_screenshot`, `execute_api_request`. This is
+  the *only* path from the agent to a browser — no raw Playwright or shell access anywhere
+  above it.
+- **Milestone 3** — `ReproductionAgent`, the LLM-driven loop. See "How the agent loop works"
+  below.
+- **Milestone 4** — `PlaywrightTestGenerator` turns a recorded trace into a runnable Playwright
+  regression test deterministically (templated, not LLM-authored), and
+  `POST /api/agent-runs/{id}/generate-test` executes it via the real Playwright CLI and
+  persists the result (`GeneratedTest`/`TestRun` entities).
+- **Milestone 5** — a minimal dashboard (`wwwroot/`, plain HTML/JS, served by the API itself)
+  with hand-written Playwright e2e coverage (`e2e/dashboard/`), plus GitHub Actions CI.
+- **Beyond the plan** — `POST /reproduce` now actually executes `ReproductionAgent` via a
+  background task queue instead of only creating a row. See "Running a real reproduction".
 
 ### How the agent loop works
 
@@ -40,26 +62,65 @@ The loop is written out rather than delegated to an automatic tool-invocation he
 - `NOT_REPRODUCED` requires having actually performed the steps. Being unable to test something is `INCONCLUSIVE` — reporting a bug as "not reproduced" when the agent never got there would be the most damaging possible output.
 - Two seams (`IMessagesClient`, `IBrowserTools`) keep the loop deterministic and testable: the agent knows about *named tools*, not about MCP or Playwright, and the model is scripted in tests.
 
+### How a generated regression test works
+
+`PlaywrightTestGenerator` templates a `.spec.ts` file from the recorded trace. One deliberate
+inversion from a literal reading of the original spec: the generated assertion encodes the
+*expected correct* behavior (no server error, no new console errors), not the observed bug.
+Asserting the bug itself (e.g. "expect status to be 500") would make the test pass forever,
+including after a real fix — the opposite of what a regression test is for. This way the test
+fails now (bug present) and starts passing the moment someone actually fixes it.
+
+Two non-obvious things the generator has to handle, both found by actually running the
+generated output against the real app rather than just reasoning about it: a click that
+triggers an async fetch-then-redirect needs the same post-click pause the recording tool
+itself uses, or Playwright's own navigation races the next action; and a recorded email value
+has to be regenerated per run (behind a shared variable, so register and a later login still
+agree with each other), or replaying the literal captured value tries to re-register an
+account that already exists.
+
 ### Running a real reproduction
 
-The loop needs an Anthropic API key (it defaults to `claude-opus-5`, configurable via `AgentOptions.Model`):
+The loop needs a real Anthropic API key (defaults to `claude-opus-5`, configurable via
+`AgentOptions`/`appsettings`):
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Milestone 4 (recording the trace into a generated Playwright regression test) is next.
+Without one, a reproduction run still completes the full pipeline (queued → running →
+persisted) — it just ends `Failed` with the real API error as `FailureReason`, rather than
+getting stuck. That's by design: `Failed` (the agent broke) and `Inconclusive` (the agent ran
+fine but couldn't decide) are different facts, and the executor is written to always resolve
+one way or the other, never leave a run stuck.
+
+### Known boundary: this runs from source, not from the containerized `api` service
+
+Reproducing a bug for real needs `mcp-tools/dist/` (to spawn the MCP server) and generating a
+test needs `e2e/` (to run the generated file) to exist on disk relative to the API's content
+root. Neither is copied into the `api` Docker image. So: Docker Compose hosts `sql-server` and
+`target-app`; run the API itself via `dotnet run` from source to exercise the full agent
+pipeline and dashboard. This is a real, intentional scope boundary, not an oversight — see
+"Running locally" below for the exact commands.
 
 ### Running locally
 
 ```bash
-docker compose up --build -d
+# SQL Server + target-app in Docker; API runs from source so it can find mcp-tools/ and e2e/
+docker compose up -d sql-server target-app
+
 dotnet tool install --global dotnet-ef   # first time only
 cd src/BugReproducer.Api
 ASPNETCORE_ENVIRONMENT=Development dotnet ef database update
+
+# Build the MCP server once (needed for real reproductions, not for the default test suite)
+cd ../../mcp-tools && npm install && npx playwright install chromium && npm run build && cd ..
+
+export ANTHROPIC_API_KEY=sk-ant-...   # optional — without it, runs complete and end Failed
+cd src/BugReproducer.Api && ASPNETCORE_ENVIRONMENT=Development dotnet run --urls http://localhost:5199
 ```
 
-Swagger UI: http://localhost:5199/swagger
+Dashboard: http://localhost:5199 — Swagger UI: http://localhost:5199/swagger
 
 Tests (no database or containers required — they run against SQLite in-memory):
 
@@ -76,11 +137,25 @@ cd mcp-tools && npm install && npx playwright install chromium && npm run build 
 dotnet test --filter "Category=RequiresBrowserAndTargetApp"
 ```
 
+Hand-written e2e tests of the dashboard itself (needs the full stack above running natively,
+not just gated xUnit tests — not yet wired into CI, see `.github/workflows/ci.yml`):
+
+```bash
+cd e2e && npx playwright test dashboard/
+```
+
 ## Milestones
 
-0. API skeleton: Swagger, EF Core + SQL Server, first migration, JWT auth working in Swagger UI
-1. `Project` / `AgentRun` / `AgentStep` entities + relations; `reproduce` endpoint creates an `AgentRun` (no LLM yet)
-2. MCP server (3 tools) + hardcoded (non-LLM) agent loop against the target app — proves the wiring
-3. Real LLM tool-calling loop; REPRODUCED/NOT/INCONCLUSIVE decision with observed-vs-inferred evidence separation
-4. Trace recording → deterministic Playwright test generation → execute generated test, store result
-5. xUnit coverage of agent decision logic, Playwright e2e tests of this app's dashboard, Docker Compose, GitHub Actions CI
+0. API skeleton: Swagger, EF Core + SQL Server, first migration, JWT auth working in Swagger UI — **done**
+1. `Project` / `AgentRun` / `AgentStep` entities + relations; `reproduce` endpoint creates an `AgentRun` — **done**
+2. MCP server (now 8 tools) + a proven hardcoded (non-LLM) wiring check against the target app — **done**
+3. Real LLM tool-calling loop; REPRODUCED/NOT/INCONCLUSIVE decision with observed-vs-inferred evidence separation — **done**
+4. Trace recording → deterministic Playwright test generation → execute generated test, store result — **done**
+5. xUnit coverage of agent decision logic, Playwright e2e tests of this app's dashboard, Docker Compose, GitHub Actions CI — **done**
+
+### Possible next steps (not started)
+
+- Containerize the agent pipeline itself (bundle `mcp-tools`/`e2e` + Node into the `api` image) so a real reproduction doesn't require running the API from source.
+- Wire the dashboard's e2e tests into CI (needs the API + migrations running there too, not just `target-app`).
+- `read_source_file`/`search_code`/OpenAPI-spec tools (deferred from Milestone 2 as v2 scope).
+- Role system beyond the single owner check (deliberately out of scope for this project, see memory of the original design discussion).
