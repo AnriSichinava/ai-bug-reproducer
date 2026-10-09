@@ -23,3 +23,8 @@ appsettings.*.local.json
 
 ## OS
 .DS_Store
+
+## Local agent tooling (installed via `npx skills add`, not part of the product)
+.agents/
+.claude/
+skills-lock.json

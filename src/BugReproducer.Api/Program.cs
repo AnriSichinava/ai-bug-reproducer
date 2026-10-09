@@ -70,10 +70,30 @@ builder.Services.AddSingleton(new AgentOptions
     Model = builder.Configuration["Agent:Model"] ?? "claude-opus-5",
 });
 
-// AnthropicClient reads ANTHROPIC_API_KEY from the environment itself; nothing to wire
-// here beyond constructing it. IMessagesClient is the seam the tests replace.
-builder.Services.AddSingleton<AnthropicClient>();
-builder.Services.AddScoped<IMessagesClient, AnthropicMessagesClient>();
+// Provider is swappable via config without touching ReproductionAgent, which only ever
+// depends on IMessagesClient. Anthropic remains the default; Gemini is an additional
+// option (e.g. Gemini:ApiKey + Agent:Provider=Gemini) for trying the agent against
+// Gemini's free tier.
+var provider = builder.Configuration["Agent:Provider"] ?? "Anthropic";
+if (string.Equals(provider, "Gemini", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient();
+    builder.Services.AddScoped<IMessagesClient>(sp =>
+    {
+        var apiKey = builder.Configuration["Gemini:ApiKey"]
+            ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY")
+            ?? throw new InvalidOperationException("Gemini:ApiKey or GEMINI_API_KEY must be set when Agent:Provider is Gemini.");
+        var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+        return new GeminiMessagesClient(httpClient, apiKey);
+    });
+}
+else
+{
+    // AnthropicClient reads ANTHROPIC_API_KEY from the environment itself; nothing to
+    // wire here beyond constructing it.
+    builder.Services.AddSingleton<AnthropicClient>();
+    builder.Services.AddScoped<IMessagesClient, AnthropicMessagesClient>();
+}
 
 builder.Services.AddScoped<IBrowserTools>(_ =>
 {
