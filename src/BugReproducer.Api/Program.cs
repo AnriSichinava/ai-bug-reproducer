@@ -65,6 +65,9 @@ builder.Services.AddHostedService<QueuedHostedService>();
 builder.Services.AddSingleton(new AgentOptions
 {
     TargetBaseUrl = builder.Configuration["TargetApp:BaseUrl"] ?? "http://localhost:4000",
+    // Configurable rather than hardcoded so cost/quality can be balanced per environment
+    // without a code change -- e.g. Haiku for cheap iteration, Opus for a polished demo.
+    Model = builder.Configuration["Agent:Model"] ?? "claude-opus-5",
 });
 
 // AnthropicClient reads ANTHROPIC_API_KEY from the environment itself; nothing to wire
