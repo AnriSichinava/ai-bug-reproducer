@@ -17,8 +17,15 @@ namespace BugReproducer.Agent;
 /// [JsonPropertyName] attributes, so this sidesteps needing to reflect into the SDK's
 /// internal C# union types (ContentBlockParam has no public TryPick-style reader, unlike
 /// the response-side ContentBlock) -- it's the same JSON either way, just read generically.
-public class GeminiMessagesClient(HttpClient httpClient, string apiKey) : IMessagesClient
+public class GeminiMessagesClient(HttpClient httpClient, string apiKey, Func<int, CancellationToken, Task>? retryDelay = null)
+    : IMessagesClient
 {
+    // Real backoff by default; tests inject a no-op so retry behavior is verifiable
+    // without actually waiting out several seconds of delay per attempt.
+    private readonly Func<int, CancellationToken, Task> _retryDelay =
+        retryDelay ?? ((attempt, ct) => Task.Delay(TimeSpan.FromSeconds(5 * attempt), ct));
+
+
     // Gemini's thinking mode (always on for gemini-3.8-flash -- there is no "off" level,
     // and signatures are "always present" per the docs) attaches an opaque
     // "thoughtSignature" to response parts, which must be echoed back unmodified on
@@ -175,20 +182,47 @@ public class GeminiMessagesClient(HttpClient httpClient, string apiKey) : IMessa
         }
 
         var requestUri = $"https://generativelanguage.googleapis.com/v1beta/models/{modelId}:generateContent";
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
-        {
-            Content = JsonContent.Create((JsonNode)geminiRequest),
-        };
-        httpRequest.Headers.Add("x-goog-api-key", apiKey);
-
-        using var response = await httpClient.SendAsync(httpRequest, cancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException($"Gemini API request failed ({(int)response.StatusCode}): {responseBody}");
-        }
-
+        var responseBody = await SendWithRetryAsync(requestUri, geminiRequest, cancellationToken);
         return BuildAnthropicShapedMessage(responseBody, modelId);
+    }
+
+    /// Gemini's free tier returns 503 ("high demand") often enough in practice -- hit
+    /// twice in two consecutive real runs while testing this -- that treating it as
+    /// fatal would make the agent unusably flaky rather than just slow. Retries 429/5xx
+    /// with backoff; a real client error (400/401/404/...) still fails immediately,
+    /// since that's a bug to fix, not a capacity blip to wait out.
+    private async Task<string> SendWithRetryAsync(string requestUri, JsonObject body, CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 4;
+        for (var attempt = 1; ; attempt++)
+        {
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
+            {
+                Content = JsonContent.Create((JsonNode)body.DeepClone()),
+            };
+            httpRequest.Headers.Add("x-goog-api-key", apiKey);
+
+            using var response = await httpClient.SendAsync(httpRequest, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return responseBody;
+            }
+
+            var isTransient = response.StatusCode is System.Net.HttpStatusCode.TooManyRequests
+                or System.Net.HttpStatusCode.InternalServerError
+                or System.Net.HttpStatusCode.BadGateway
+                or System.Net.HttpStatusCode.ServiceUnavailable
+                or System.Net.HttpStatusCode.GatewayTimeout;
+
+            if (!isTransient || attempt >= maxAttempts)
+            {
+                throw new InvalidOperationException($"Gemini API request failed ({(int)response.StatusCode}): {responseBody}");
+            }
+
+            await _retryDelay(attempt, cancellationToken);
+        }
     }
 
     /// Reconstructs an Anthropic SDK Message from Gemini's response JSON, by building

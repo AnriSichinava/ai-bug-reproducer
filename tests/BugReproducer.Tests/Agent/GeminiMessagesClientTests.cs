@@ -201,6 +201,59 @@ public class GeminiMessagesClientTests
         Assert.Equal("opaque-signature-abc", echoedPart.GetProperty("thoughtSignature").GetString());
     }
 
+    [Fact]
+    public async Task TransientServerErrorsAreRetriedRatherThanFailingTheRun()
+    {
+        var handler = new SequencedStatusHandler(
+            (HttpStatusCode.ServiceUnavailable, """{ "error": { "message": "high demand" } }"""),
+            (HttpStatusCode.ServiceUnavailable, """{ "error": { "message": "high demand" } }"""),
+            (HttpStatusCode.OK, """{ "candidates": [{ "content": { "parts": [{ "text": "ok" }] } }] }"""));
+        var client = new GeminiMessagesClient(new HttpClient(handler), "fake-key", retryDelay: (_, _) => Task.CompletedTask);
+
+        var response = await client.CreateAsync(new MessageCreateParams
+        {
+            Model = "gemini-3.8-flash",
+            MaxTokens = 1024,
+            Messages = [new() { Role = Role.User, Content = "go" }],
+        });
+
+        Assert.Equal(3, handler.CallCount);
+        Assert.Contains(response.Content.Select(b => b.Value).OfType<TextBlock>(), b => b.Text == "ok");
+    }
+
+    [Fact]
+    public async Task ARealClientErrorFailsImmediatelyRatherThanRetrying()
+    {
+        var handler = new SequencedStatusHandler(
+            (HttpStatusCode.BadRequest, """{ "error": { "message": "invalid request" } }"""));
+        var client = new GeminiMessagesClient(new HttpClient(handler), "fake-key");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => client.CreateAsync(new MessageCreateParams
+        {
+            Model = "gemini-3.8-flash",
+            MaxTokens = 1024,
+            Messages = [new() { Role = Role.User, Content = "go" }],
+        }));
+
+        Assert.Equal(1, handler.CallCount);
+        Assert.Contains("400", ex.Message);
+    }
+
+    private class SequencedStatusHandler(params (HttpStatusCode Status, string Body)[] responses) : HttpMessageHandler
+    {
+        public int CallCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var (status, body) = responses[Math.Min(CallCount, responses.Length - 1)];
+            CallCount++;
+            return Task.FromResult(new HttpResponseMessage(status)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
     /// Returns each given response in order (the last repeats once exhausted), and
     /// records every outgoing request -- so one client/handler pair can be reused across
     /// several CreateAsync calls in a test, which matters whenever behaviour depends on
