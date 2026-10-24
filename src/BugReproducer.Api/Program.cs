@@ -117,6 +117,42 @@ builder.Services.AddScoped<AgentRunExecutor>();
 
 var app = builder.Build();
 
+// Crash recovery: a run that was Pending/Running when the process last stopped (a crash,
+// a deploy, a forced kill -- found the hard way, by kill -9'ing this process mid-run
+// several times while iterating on the Gemini integration) has no way to ever update
+// itself again. Left alone, its row blocks every future reproduce call for that bug
+// forever (the "one active run per bug" check in BugsController sees it as still
+// running). Reconcile on every startup, not just this one: any real deployment restart
+// hits the same thing.
+//
+// Best-effort: in the test host the schema isn't created until after this code runs
+// (WebApplicationFactory builds the app, then calls Database.EnsureCreated() on the
+// result), so the table genuinely doesn't exist yet there. That's fine -- a table that
+// doesn't exist has no stale runs in it either way -- but this must never stop the app
+// from starting for any other reason either.
+try
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var staleRuns = await db.AgentRuns
+        .Where(r => r.Status == AgentRunStatus.Pending || r.Status == AgentRunStatus.Running)
+        .ToListAsync();
+    foreach (var run in staleRuns)
+    {
+        run.Status = AgentRunStatus.Failed;
+        run.FailureReason = "The server restarted while this run was in progress.";
+        run.CompletedAtUtc = DateTime.UtcNow;
+    }
+    if (staleRuns.Count > 0)
+    {
+        await db.SaveChangesAsync();
+    }
+}
+catch (Exception ex)
+{
+    app.Logger.LogWarning(ex, "Could not reconcile stale agent runs on startup.");
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
