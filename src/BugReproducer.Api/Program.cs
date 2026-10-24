@@ -77,13 +77,18 @@ builder.Services.AddSingleton(new AgentOptions
 var provider = builder.Configuration["Agent:Provider"] ?? "Anthropic";
 if (string.Equals(provider, "Gemini", StringComparison.OrdinalIgnoreCase))
 {
-    builder.Services.AddHttpClient();
+    // .NET's HttpClient defaults to a 100-second timeout. Gemini 3.8 Flash has its own
+    // "thinking" mode on by default (confirmed: even a trivial "Say OK" prompt burned 61
+    // thinking tokens), and a full agentic turn with a large system prompt and 10 tool
+    // schemas genuinely took longer than that to produce a first response -- found by
+    // running a real reproduction, not a hypothetical concern.
+    builder.Services.AddHttpClient("Gemini", client => client.Timeout = TimeSpan.FromMinutes(5));
     builder.Services.AddScoped<IMessagesClient>(sp =>
     {
         var apiKey = builder.Configuration["Gemini:ApiKey"]
             ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY")
             ?? throw new InvalidOperationException("Gemini:ApiKey or GEMINI_API_KEY must be set when Agent:Provider is Gemini.");
-        var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+        var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("Gemini");
         return new GeminiMessagesClient(httpClient, apiKey);
     });
 }
