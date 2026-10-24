@@ -1,0 +1,266 @@
+/* framed-sheet: a tinted ground, the app on a white sheet inset from the window edge,
+   no shadow, colour reserved for data/status/the one primary action. Chosen directly
+   for this fit (B2B / developer tooling) rather than dealt by the skill's script. */
+
+:root {
+  --ground: #f6f6f7;
+  --sheet: #ffffff;
+  --edge: #eaeaea;
+  --ink: #18181b;
+  --ink-grey: #6b6b6f;
+  --ink-faint: #9a9a9e;
+  --accent: #1d5fbf;
+  --accent-ink: #ffffff;
+  --positive: #0a7a3d;
+  --positive-bg: #e3f6e9;
+  --negative: #b4232c;
+  --negative-bg: #fbe9ea;
+  --radius: 12px;
+  --gutter: 28px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 15px/1.5 -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  max-width: 760px;
+  margin: 8px auto;
+  background: var(--sheet);
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  min-height: calc(100vh - 16px);
+  padding: 0 0 48px;
+}
+
+/* run.html's steps table carries code-shaped output and genuinely needs the room;
+   the simple CRUD screens (dashboard, login, register, runs list) do not. */
+.shell.wide {
+  max-width: 1040px;
+}
+
+nav.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px var(--gutter);
+  border-bottom: 1px solid var(--edge);
+  font-size: 14px;
+  color: var(--ink-grey);
+}
+
+nav.topbar .mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent);
+  display: inline-block;
+}
+
+nav.topbar .product {
+  color: var(--ink);
+  font-weight: 600;
+  margin-right: auto;
+}
+
+nav.topbar a,
+nav.topbar button {
+  color: var(--ink-grey);
+  text-decoration: none;
+  font: inherit;
+}
+
+nav.topbar button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+nav.topbar a:hover,
+nav.topbar button:hover {
+  color: var(--ink);
+}
+
+main {
+  padding: 32px var(--gutter) 0;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-grey);
+  margin: 36px 0 14px;
+  text-transform: none;
+}
+
+.subline {
+  color: var(--ink-grey);
+  font-size: 14px;
+  margin: 0 0 28px;
+}
+
+.panel {
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  max-width: 480px;
+}
+
+.panel.wide { max-width: none; }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 420px;
+}
+
+form.inline {
+  flex-direction: row;
+  align-items: flex-end;
+  max-width: none;
+  flex-wrap: wrap;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-grey);
+}
+
+input, textarea {
+  font: inherit;
+  padding: 9px 11px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--ink);
+  min-width: 220px;
+}
+
+input:focus, textarea:focus, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+textarea {
+  min-height: 90px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--edge);
+  background: var(--sheet);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button:hover { background: var(--ground); }
+
+button[type="submit"],
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+button[type="submit"]:hover,
+button.primary:hover {
+  background: #184d9c;
+}
+
+ul { list-style: none; margin: 0; padding: 0; }
+
+ul.rows li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 4px;
+  border-bottom: 1px solid var(--edge);
+  font-size: 14px;
+}
+
+ul.rows li:last-child { border-bottom: none; }
+
+ul.rows a { color: var(--ink); text-decoration: none; font-weight: 500; }
+ul.rows a:hover { color: var(--accent); }
+
+.row-actions { display: flex; gap: 8px; align-items: center; }
+.row-actions a { font-size: 13px; color: var(--ink-grey); text-decoration: none; }
+.row-actions a:hover { color: var(--accent); }
+
+p.hint { color: var(--ink-grey); font-size: 13px; }
+p.error { color: var(--negative); font-size: 13px; }
+
+a.plain { color: var(--accent); text-decoration: none; }
+a.plain:hover { text-decoration: underline; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-grey);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--edge);
+}
+
+td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--edge);
+  vertical-align: top;
+}
+
+td code, pre {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  background: var(--ground);
+  border-radius: 6px;
+  padding: 1px 4px;
+}
+
+.status {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status.ok, .status[data-status="Completed"], .status[data-status="Reproduced"] {
+  background: var(--positive-bg); color: var(--positive);
+}
+
+.status.bad, .status[data-status="Failed"], .status[data-status="NotReproduced"] {
+  background: var(--negative-bg); color: var(--negative);
+}
+
+.status.neutral, .status[data-status="Pending"], .status[data-status="Running"], .status[data-status="Inconclusive"] {
+  background: var(--ground); color: var(--ink-grey);
+}

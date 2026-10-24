@@ -3,15 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <title>Agent Runs — AI Bug Reproducer</title>
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <nav>
-    <a href="/dashboard.html">Dashboard</a> |
-    <button id="logout-btn">Logout</button>
-  </nav>
+  <div class="shell">
+    <nav class="topbar">
+      <span class="mark" aria-hidden="true"></span>
+      <a href="/dashboard.html">Dashboard</a>
+      <button id="logout-btn" style="margin-left: auto;">Logout</button>
+    </nav>
 
-  <h1>Agent Runs</h1>
-  <ul id="run-list"></ul>
+    <main>
+      <h1>Agent runs</h1>
+      <div class="panel">
+        <ul id="run-list" class="rows"></ul>
+      </div>
+    </main>
+  </div>
 
   <script src="/app.js"></script>
   <script>
@@ -29,8 +37,15 @@
         li.id = `run-${run.id}`;
         const link = document.createElement('a');
         link.href = `/run.html?id=${run.id}`;
-        link.textContent = `Run #${run.id} — ${run.status}${run.verdict ? ' — ' + run.verdict : ''}`;
+        link.textContent = `Run #${run.id}`;
         li.appendChild(link);
+
+        const status = document.createElement('span');
+        status.className = 'status';
+        status.dataset.status = run.status;
+        status.textContent = run.verdict ? `${run.status} — ${run.verdict}` : run.status;
+        li.appendChild(status);
+
         list.appendChild(li);
       }
     }

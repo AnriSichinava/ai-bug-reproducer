@@ -3,16 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <title>Login — AI Bug Reproducer</title>
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <h1>Login</h1>
-  <form id="login-form">
-    <label>Email <input id="email" type="email" required /></label>
-    <label>Password <input id="password" type="password" required /></label>
-    <button id="login-btn" type="submit">Login</button>
-  </form>
-  <p id="error" style="color: red;"></p>
-  <p>No account? <a href="/register.html">Register</a></p>
+  <div class="shell">
+    <main>
+      <h1>Log in</h1>
+      <p class="subline">AI Bug Reproducer</p>
+      <form id="login-form">
+        <label>Email <input id="email" type="email" required /></label>
+        <label>Password <input id="password" type="password" required /></label>
+        <button id="login-btn" type="submit">Login</button>
+      </form>
+      <p id="error" class="error"></p>
+      <p class="hint">No account? <a class="plain" href="/register.html">Register</a></p>
+    </main>
+  </div>
 
   <script src="/app.js"></script>
   <script>

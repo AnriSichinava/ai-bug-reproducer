@@ -3,37 +3,51 @@
 <head>
   <meta charset="UTF-8" />
   <title>Dashboard — AI Bug Reproducer</title>
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <nav>
-    <strong>AI Bug Reproducer</strong> |
-    <button id="logout-btn">Logout</button>
-  </nav>
+  <div class="shell">
+    <nav class="topbar">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="product">AI Bug Reproducer</span>
+      <button id="logout-btn">Logout</button>
+    </nav>
 
-  <section>
-    <h2>New Project</h2>
-    <form id="new-project-form">
-      <input id="project-name" placeholder="Project name" required />
-      <button id="create-project-btn" type="submit">Create</button>
-    </form>
-  </section>
+    <main>
+      <h1>Projects</h1>
+      <p class="subline">Create a project, submit a bug report, and ask the agent to reproduce it.</p>
 
-  <section>
-    <h2>Projects</h2>
-    <ul id="project-list"></ul>
-  </section>
+      <div class="panel">
+        <h2>New project</h2>
+        <form id="new-project-form" class="inline">
+          <label>Name <input id="project-name" placeholder="Demo Cart App" required /></label>
+          <button id="create-project-btn" type="submit">Create</button>
+        </form>
+      </div>
 
-  <section id="bugs-section" style="display: none;">
-    <h2>Bug Reports for <span id="selected-project-name"></span></h2>
-    <form id="new-bug-form">
-      <input id="bug-title" placeholder="Short title" required />
-      <textarea id="bug-description" placeholder="Describe the bug: steps to reproduce, expected vs actual behavior" required></textarea>
-      <button id="create-bug-btn" type="submit">Submit Bug Report</button>
-    </form>
-    <ul id="bug-list"></ul>
-  </section>
+      <div class="panel">
+        <ul id="project-list" class="rows"></ul>
+      </div>
 
-  <p id="message" role="status"></p>
+      <section id="bugs-section" style="display: none;">
+        <h2>Bug reports — <span id="selected-project-name"></span></h2>
+        <div class="panel">
+          <form id="new-bug-form">
+            <label>Title <input id="bug-title" placeholder="Short title" required /></label>
+            <label>Description
+              <textarea id="bug-description" placeholder="Steps to reproduce, expected vs. actual behavior" required></textarea>
+            </label>
+            <button id="create-bug-btn" type="submit">Submit bug report</button>
+          </form>
+        </div>
+        <div class="panel">
+          <ul id="bug-list" class="rows"></ul>
+        </div>
+      </section>
+
+      <p id="message" class="hint" role="status"></p>
+    </main>
+  </div>
 
   <script src="/app.js"></script>
   <script>
@@ -78,8 +92,11 @@
         li.id = `bug-${bug.id}`;
 
         const title = document.createElement('span');
-        title.textContent = `${bug.title} — `;
+        title.textContent = bug.title;
         li.appendChild(title);
+
+        const actions = document.createElement('span');
+        actions.className = 'row-actions';
 
         const reproduceBtn = document.createElement('button');
         reproduceBtn.textContent = 'Reproduce';
@@ -94,14 +111,14 @@
             messageEl.textContent = typeof body === 'string' ? body : 'Could not start a reproduction run.';
           }
         });
-        li.appendChild(reproduceBtn);
+        actions.appendChild(reproduceBtn);
 
         const runsLink = document.createElement('a');
         runsLink.href = `/runs.html?bugId=${bug.id}`;
         runsLink.textContent = 'View runs';
-        runsLink.style.marginLeft = '0.5em';
-        li.appendChild(runsLink);
+        actions.appendChild(runsLink);
 
+        li.appendChild(actions);
         list.appendChild(li);
       }
     }
