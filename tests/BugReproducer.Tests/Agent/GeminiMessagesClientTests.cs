@@ -143,16 +143,84 @@ public class GeminiMessagesClientTests
         Assert.Equal("{\"status\":200}", functionResponse.GetProperty("response").GetProperty("result").GetString());
     }
 
-    private class CapturingHandler(string responseJson) : HttpMessageHandler
+    [Fact]
+    public async Task ThoughtSignaturesAreCapturedAndEchoedBackOnTheNextTurn()
     {
-        public string? CapturedRequestBody { get; private set; }
+        // Gemini's thinking mode attaches an opaque thoughtSignature to a functionCall
+        // part and rejects the next request if it isn't echoed back unmodified -- found
+        // by actually running a real reproduction, not a hypothetical. The id this class
+        // generates for the tool_use block is the only thing available to key the
+        // signature by, since Anthropic's ToolUseBlock has no field for it.
+        var handler = new CapturingHandler(
+            """
+            {
+              "candidates": [{
+                "content": {
+                  "parts": [{
+                    "functionCall": { "name": "navigate", "args": { "url": "http://localhost:4000" } },
+                    "thoughtSignature": "opaque-signature-abc"
+                  }]
+                }
+              }]
+            }
+            """,
+            """{ "candidates": [{ "content": { "parts": [{ "text": "done" }] } }] }""");
+        var client = new GeminiMessagesClient(new HttpClient(handler), "fake-key");
+
+        var firstResponse = await client.CreateAsync(new MessageCreateParams
+        {
+            Model = "gemini-3.8-flash",
+            MaxTokens = 1024,
+            Messages = [new() { Role = Role.User, Content = "go" }],
+        });
+        var toolUse = Assert.Single(firstResponse.Content.Select(b => b.Value).OfType<ToolUseBlock>());
+
+        // Simulate what ReproductionAgent does on the next turn: echo the tool_use back
+        // in the assistant message, using the SAME client that produced the signature --
+        // the mapping only survives within one client's lifetime (one agent run).
+        await client.CreateAsync(new MessageCreateParams
+        {
+            Model = "gemini-3.8-flash",
+            MaxTokens = 1024,
+            Messages =
+            [
+                new() { Role = Role.User, Content = "go" },
+                new()
+                {
+                    Role = Role.Assistant,
+                    Content = new List<ContentBlockParam>
+                    {
+                        new ToolUseBlockParam { ID = toolUse.ID, Name = toolUse.Name, Input = toolUse.Input },
+                    },
+                },
+            ],
+        });
+
+        using var secondRequest = JsonDocument.Parse(handler.CapturedRequestBodies[1]);
+        var echoedPart = secondRequest.RootElement.GetProperty("contents")[1].GetProperty("parts")[0];
+        Assert.Equal("opaque-signature-abc", echoedPart.GetProperty("thoughtSignature").GetString());
+    }
+
+    /// Returns each given response in order (the last repeats once exhausted), and
+    /// records every outgoing request -- so one client/handler pair can be reused across
+    /// several CreateAsync calls in a test, which matters whenever behaviour depends on
+    /// state held across turns (like the thought-signature mapping).
+    private class CapturingHandler(params string[] responseJsonSequence) : HttpMessageHandler
+    {
+        private int _callCount;
+        public List<string> CapturedRequestBodies { get; } = [];
         public string? CapturedRequestUri { get; private set; }
+        public string? CapturedRequestBody => CapturedRequestBodies.Count > 0 ? CapturedRequestBodies[^1] : null;
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             CapturedRequestUri = request.RequestUri!.ToString();
-            CapturedRequestBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            CapturedRequestBodies.Add(
+                request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken));
+
+            var responseJson = responseJsonSequence[Math.Min(_callCount, responseJsonSequence.Length - 1)];
+            _callCount++;
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {

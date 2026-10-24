@@ -19,6 +19,16 @@ namespace BugReproducer.Agent;
 /// the response-side ContentBlock) -- it's the same JSON either way, just read generically.
 public class GeminiMessagesClient(HttpClient httpClient, string apiKey) : IMessagesClient
 {
+    // Gemini's thinking mode (always on for gemini-3.8-flash -- there is no "off" level,
+    // and signatures are "always present" per the docs) attaches an opaque
+    // "thoughtSignature" to response parts, which must be echoed back unmodified on
+    // later turns or the API rejects the request ("Function call is missing a
+    // thought_signature"). Anthropic's ToolUseBlock has no field to carry this kind of
+    // provider-specific metadata through, so it's tracked here instead, keyed by the
+    // tool_use id this class itself generates. This instance lives for one whole agent
+    // run (IMessagesClient is scoped per run), so the mapping survives across turns.
+    private readonly Dictionary<string, string> _thoughtSignaturesByToolUseId = new();
+
     public async Task<Message> CreateAsync(MessageCreateParams parameters, CancellationToken cancellationToken = default)
     {
         // MessageCreateParams carries the real, wire-shaped request in RawBodyData;
@@ -88,14 +98,20 @@ public class GeminiMessagesClient(HttpClient httpClient, string apiKey) : IMessa
                                 break;
 
                             case "tool_use":
-                                parts.Add(new JsonObject
+                                var functionCallPart = new JsonObject
                                 {
                                     ["functionCall"] = new JsonObject
                                     {
                                         ["name"] = block.GetProperty("name").GetString(),
                                         ["args"] = JsonNode.Parse(block.GetProperty("input").GetRawText()),
                                     },
-                                });
+                                };
+                                var callId = block.GetProperty("id").GetString()!;
+                                if (_thoughtSignaturesByToolUseId.TryGetValue(callId, out var signature))
+                                {
+                                    functionCallPart["thoughtSignature"] = signature;
+                                }
+                                parts.Add(functionCallPart);
                                 break;
 
                             case "tool_result":
@@ -180,7 +196,7 @@ public class GeminiMessagesClient(HttpClient httpClient, string apiKey) : IMessa
     /// (Container, Diagnostics, StopDetails, a fully-populated Usage, ...) meant for
     /// deserializing a real API response, not for a plain object initializer, so this is
     /// the same technique the test fixtures (ModelResponses.Build) use for the same reason.
-    private static Message BuildAnthropicShapedMessage(string geminiResponseBody, string modelId)
+    private Message BuildAnthropicShapedMessage(string geminiResponseBody, string modelId)
     {
         using var responseDoc = JsonDocument.Parse(geminiResponseBody);
         var candidate = responseDoc.RootElement.GetProperty("candidates")[0];
@@ -200,10 +216,17 @@ public class GeminiMessagesClient(HttpClient httpClient, string apiKey) : IMessa
                 {
                     hasToolCall = true;
                     var argsJson = functionCallEl.TryGetProperty("args", out var argsEl) ? argsEl.GetRawText() : "{}";
+                    var toolUseId = $"toolu_{Guid.NewGuid():N}";
+
+                    if (part.TryGetProperty("thoughtSignature", out var signatureEl))
+                    {
+                        _thoughtSignaturesByToolUseId[toolUseId] = signatureEl.GetString()!;
+                    }
+
                     anthropicBlocks.Add(new JsonObject
                     {
                         ["type"] = "tool_use",
-                        ["id"] = $"toolu_{Guid.NewGuid():N}",
+                        ["id"] = toolUseId,
                         ["name"] = functionCallEl.GetProperty("name").GetString(),
                         ["input"] = JsonNode.Parse(argsJson),
                         ["caller"] = null,
