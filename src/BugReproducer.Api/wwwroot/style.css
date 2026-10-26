@@ -1,22 +1,61 @@
-/* framed-sheet: a tinted ground, the app on a white sheet inset from the window edge,
-   no shadow, colour reserved for data/status/the one primary action. Chosen directly
-   for this fit (B2B / developer tooling) rather than dealt by the skill's script. */
+/* Apple-style: follows the Human Interface Guidelines foundations (hig-foundations skill).
+   - Content over chrome: grouped white surfaces on a soft grey ground, hairline
+     separators instead of borders, no shadows.
+   - System font stack (SF Pro on Apple devices) with SF-style tight tracking on titles.
+   - Semantic colour roles modelled on iOS/macOS system colours, adapting to the OS
+     appearance automatically (HIG: follow the system setting, no in-app toggle).
+   - A translucent "material" top bar, and motion that honours Reduce Motion. */
 
 :root {
-  --ground: #f6f6f7;
-  --sheet: #ffffff;
-  --edge: #eaeaea;
-  --ink: #18181b;
-  --ink-grey: #6b6b6f;
-  --ink-faint: #9a9a9e;
-  --accent: #1d5fbf;
-  --accent-ink: #ffffff;
-  --positive: #0a7a3d;
-  --positive-bg: #e3f6e9;
-  --negative: #b4232c;
-  --negative-bg: #fbe9ea;
-  --radius: 12px;
-  --gutter: 28px;
+  color-scheme: light dark;
+
+  --ground: #f5f5f7;
+  --surface: #ffffff;
+  --label: #1d1d1f;
+  --label-2: rgba(60, 60, 67, 0.62);
+  --label-3: rgba(60, 60, 67, 0.32);
+  --separator: rgba(60, 60, 67, 0.16);
+  --fill: rgba(118, 118, 128, 0.10);
+  --fill-hover: rgba(118, 118, 128, 0.18);
+  --material: rgba(251, 251, 253, 0.72);
+
+  --blue: #0071e3;
+  --blue-hover: #0077ed;
+  --focus: rgba(0, 113, 227, 0.35);
+  --green: #248a3d;
+  --green-bg: rgba(52, 199, 89, 0.14);
+  --red: #d70015;
+  --red-bg: rgba(255, 59, 48, 0.11);
+  --orange: #c93400;
+  --orange-bg: rgba(255, 149, 0, 0.14);
+
+  --content: 760px;
+  --gutter: 22px;
+  --radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #000000;
+    --surface: #1c1c1e;
+    --label: #f5f5f7;
+    --label-2: rgba(235, 235, 245, 0.62);
+    --label-3: rgba(235, 235, 245, 0.30);
+    --separator: rgba(84, 84, 88, 0.55);
+    --fill: rgba(118, 118, 128, 0.24);
+    --fill-hover: rgba(118, 118, 128, 0.34);
+    --material: rgba(22, 22, 23, 0.72);
+
+    --blue: #2997ff;
+    --blue-hover: #47a6ff;
+    --focus: rgba(41, 151, 255, 0.45);
+    --green: #30d158;
+    --green-bg: rgba(48, 209, 88, 0.16);
+    --red: #ff453a;
+    --red-bg: rgba(255, 69, 58, 0.16);
+    --orange: #ff9f0a;
+    --orange-bg: rgba(255, 159, 10, 0.16);
+  }
 }
 
 * { box-sizing: border-box; }
@@ -24,116 +63,117 @@
 body {
   margin: 0;
   background: var(--ground);
-  color: var(--ink);
-  font: 400 15px/1.5 -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  color: var(--label);
+  font: 400 15px/1.47 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
 }
 
+/* The shell no longer draws a frame; it just sets the readable content width. The
+   top bar spans the full window and centres its contents on that same column. */
 .shell {
-  max-width: 760px;
-  margin: 8px auto;
-  background: var(--sheet);
-  border: 1px solid var(--edge);
-  border-radius: 16px;
-  min-height: calc(100vh - 16px);
-  padding: 0 0 48px;
+  min-height: 100vh;
+  padding-bottom: 64px;
 }
 
-/* run.html's steps table carries code-shaped output and genuinely needs the room;
-   the simple CRUD screens (dashboard, login, register, runs list) do not. */
-.shell.wide {
-  max-width: 1040px;
-}
+.shell.wide { --content: 1080px; }
 
 nav.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 18px var(--gutter);
-  border-bottom: 1px solid var(--edge);
-  font-size: 14px;
-  color: var(--ink-grey);
+  gap: 20px;
+  height: 52px;
+  padding: 0 max(var(--gutter), calc((100% - var(--content)) / 2 + var(--gutter)));
+  background: var(--material);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--separator);
+  font-size: 13px;
 }
 
 nav.topbar .mark {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: var(--accent);
-  display: inline-block;
+  background: linear-gradient(180deg, #3a95ff, #0064d2);
+  flex: none;
 }
 
 nav.topbar .product {
-  color: var(--ink);
   font-weight: 600;
+  font-size: 14px;
   margin-right: auto;
 }
 
 nav.topbar a,
 nav.topbar button {
-  color: var(--ink-grey);
+  color: var(--label-2);
   text-decoration: none;
   font: inherit;
-}
-
-nav.topbar button {
   background: none;
   border: none;
-  cursor: pointer;
   padding: 0;
+  cursor: pointer;
+  transition: color 0.2s ease;
 }
 
 nav.topbar a:hover,
-nav.topbar button:hover {
-  color: var(--ink);
-}
+nav.topbar button:hover { color: var(--label); background: none; }
 
 main {
-  padding: 32px var(--gutter) 0;
+  max-width: var(--content);
+  margin: 0 auto;
+  padding: 44px var(--gutter) 0;
 }
 
+/* Large Title / Title 3, with SF Display's tighter tracking at large sizes. */
 h1 {
-  font-size: 24px;
+  font-size: 34px;
+  line-height: 1.12;
   font-weight: 700;
-  margin: 0 0 4px;
+  letter-spacing: -0.022em;
+  margin: 0 0 6px;
 }
 
 h2 {
-  font-size: 14px;
+  font-size: 20px;
+  line-height: 1.25;
   font-weight: 600;
-  color: var(--ink-grey);
-  margin: 36px 0 14px;
-  text-transform: none;
+  letter-spacing: -0.017em;
+  margin: 40px 0 12px;
 }
+
+.panel > h2:first-child { margin-top: 0; }
 
 .subline {
-  color: var(--ink-grey);
-  font-size: 14px;
-  margin: 0 0 28px;
+  color: var(--label-2);
+  font-size: 17px;
+  margin: 0 0 32px;
 }
 
+/* Inset grouped surface: no border and no shadow, the ground does the separating. */
 .panel {
-  border: 1px solid var(--edge);
+  background: var(--surface);
   border-radius: var(--radius);
   padding: 20px;
-  margin-bottom: 16px;
-  max-width: 480px;
+  margin-bottom: 18px;
 }
-
-.panel.wide { max-width: none; }
 
 form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  max-width: 420px;
+  gap: 16px;
+  max-width: 460px;
 }
 
 form.inline {
   flex-direction: row;
   align-items: flex-end;
-  max-width: none;
   flex-wrap: wrap;
+  max-width: none;
 }
 
 label {
@@ -141,79 +181,105 @@ label {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
-  color: var(--ink-grey);
+  font-weight: 500;
+  color: var(--label-2);
 }
 
 input, textarea {
   font: inherit;
-  padding: 9px 11px;
-  border: 1px solid var(--edge);
-  border-radius: 8px;
-  background: var(--sheet);
-  color: var(--ink);
-  min-width: 220px;
+  font-size: 15px;
+  color: var(--label);
+  background: var(--fill);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 9px 12px;
+  min-width: 240px;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-input:focus, textarea:focus, button:focus-visible, a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+input::placeholder, textarea::placeholder { color: var(--label-3); }
+
+input:focus, textarea:focus {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+button:focus-visible, a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--focus);
+  border-radius: 980px;
 }
 
 textarea {
-  min-height: 90px;
+  min-height: 96px;
   resize: vertical;
-  font-family: inherit;
 }
 
+/* Capsule buttons: filled blue for the one primary action, tinted grey otherwise. */
 button {
   font: inherit;
-  font-weight: 600;
-  padding: 9px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--edge);
-  background: var(--sheet);
-  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 980px;
+  background: var(--fill);
+  color: var(--blue);
   cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
 }
 
-button:hover { background: var(--ground); }
+button:hover { background: var(--fill-hover); }
+button:active { transform: scale(0.97); }
 
 button[type="submit"],
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--blue);
+  color: #ffffff;
 }
 
 button[type="submit"]:hover,
-button.primary:hover {
-  background: #184d9c;
-}
+button.primary:hover { background: var(--blue-hover); }
+
+form button[type="submit"] { align-self: flex-start; }
 
 ul { list-style: none; margin: 0; padding: 0; }
 
+/* Grouped list rows with inset hairline separators. */
 ul.rows li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 13px 4px;
-  border-bottom: 1px solid var(--edge);
-  font-size: 14px;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 0;
+  font-size: 15px;
+  box-shadow: inset 0 -0.5px 0 var(--separator);
 }
 
-ul.rows li:last-child { border-bottom: none; }
+.panel ul.rows { margin: -10px 0; }
+ul.rows li:last-child { box-shadow: none; }
+ul.rows:empty::before {
+  content: "Nothing here yet.";
+  display: block;
+  padding: 14px 0;
+  color: var(--label-3);
+}
 
-ul.rows a { color: var(--ink); text-decoration: none; font-weight: 500; }
-ul.rows a:hover { color: var(--accent); }
+ul.rows a { color: var(--label); text-decoration: none; font-weight: 500; }
+ul.rows a:hover { color: var(--blue); }
 
-.row-actions { display: flex; gap: 8px; align-items: center; }
-.row-actions a { font-size: 13px; color: var(--ink-grey); text-decoration: none; }
-.row-actions a:hover { color: var(--accent); }
+.row-actions { display: flex; gap: 14px; align-items: center; flex: none; }
+ul.rows .row-actions a { font-size: 14px; color: var(--blue); text-decoration: none; font-weight: 400; }
+ul.rows .row-actions a:hover { text-decoration: underline; }
+.row-actions button { padding: 6px 14px; font-size: 13px; }
 
-p.hint { color: var(--ink-grey); font-size: 13px; }
-p.error { color: var(--negative); font-size: 13px; }
+p.hint { color: var(--label-2); font-size: 13px; }
+p.error { color: var(--red); font-size: 13px; }
 
-a.plain { color: var(--accent); text-decoration: none; }
+a.plain { color: var(--blue); text-decoration: none; }
 a.plain:hover { text-decoration: underline; }
 
 table {
@@ -225,42 +291,79 @@ table {
 th {
   text-align: left;
   font-weight: 500;
-  color: var(--ink-grey);
+  color: var(--label-2);
   font-size: 12px;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--edge);
+  box-shadow: inset 0 -0.5px 0 var(--separator);
 }
 
 td {
-  padding: 9px 10px;
-  border-bottom: 1px solid var(--edge);
+  padding: 10px;
   vertical-align: top;
+  box-shadow: inset 0 -0.5px 0 var(--separator);
 }
+
+tr:last-child td { box-shadow: none; }
 
 td code, pre {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 12px;
-  background: var(--ground);
+  background: var(--fill);
   border-radius: 6px;
-  padding: 1px 4px;
+  padding: 1px 5px;
 }
+
+pre { padding: 12px 14px; overflow-x: auto; }
 
 .status {
   display: inline-block;
-  padding: 3px 9px;
-  border-radius: 999px;
+  padding: 3px 10px;
+  border-radius: 980px;
   font-size: 12px;
   font-weight: 600;
+  background: var(--fill);
+  color: var(--label-2);
 }
 
 .status.ok, .status[data-status="Completed"], .status[data-status="Reproduced"] {
-  background: var(--positive-bg); color: var(--positive);
+  background: var(--green-bg); color: var(--green);
 }
 
 .status.bad, .status[data-status="Failed"], .status[data-status="NotReproduced"] {
-  background: var(--negative-bg); color: var(--negative);
+  background: var(--red-bg); color: var(--red);
 }
 
-.status.neutral, .status[data-status="Pending"], .status[data-status="Running"], .status[data-status="Inconclusive"] {
-  background: var(--ground); color: var(--ink-grey);
+.status[data-status="Running"] {
+  background: var(--orange-bg); color: var(--orange);
 }
+
+.status.neutral, .status[data-status="Pending"], .status[data-status="Inconclusive"] {
+  background: var(--fill); color: var(--label-2);
+}
+
+@media (max-width: 600px) {
+  h1 { font-size: 28px; }
+  input, textarea { min-width: 0; width: 100%; }
+  form.inline { flex-direction: column; align-items: stretch; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  button:active { transform: none; }
+}
+
+/* Sign-in / registration: a single centred card, like an Apple Account sign-in sheet. */
+.shell.auth main {
+  max-width: 400px;
+  margin: 12vh auto 0;
+  padding: 40px 36px 28px;
+  background: var(--surface);
+  border-radius: 18px;
+  text-align: center;
+}
+
+.shell.auth form { max-width: none; text-align: left; }
+.shell.auth input { width: 100%; min-width: 0; }
+.shell.auth form button[type="submit"] { align-self: stretch; padding: 11px 18px; font-size: 15px; }
+.shell.auth .subline { margin-bottom: 28px; }
+.shell.auth p.hint { margin-bottom: 0; }
