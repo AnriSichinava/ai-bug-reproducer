@@ -204,7 +204,21 @@ public class GeminiMessagesClient(HttpClient httpClient, string apiKey, Func<int
             };
             httpRequest.Headers.Add("x-goog-api-key", apiKey);
 
-            using var response = await httpClient.SendAsync(httpRequest, cancellationToken);
+            HttpResponseMessage response;
+            try
+            {
+                response = await httpClient.SendAsync(httpRequest, cancellationToken);
+            }
+            catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested && attempt < maxAttempts)
+            {
+                // HttpClient.Timeout elapsed (the caller didn't cancel): under heavy load
+                // Gemini sometimes just never answers -- seen in a real run, stuck >5 min on
+                // step 3. That's the same capacity blip as a 503, so treat it the same way.
+                await _retryDelay(attempt, cancellationToken);
+                continue;
+            }
+
+            using var _ = response;
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (response.IsSuccessStatusCode)

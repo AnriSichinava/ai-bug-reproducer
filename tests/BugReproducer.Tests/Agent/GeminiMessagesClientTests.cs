@@ -258,6 +258,43 @@ public class GeminiMessagesClientTests
         Assert.Contains("daily quota", ex.Message);
     }
 
+    [Fact]
+    public async Task ATimedOutRequestIsRetriedRatherThanFailingTheRun()
+    {
+        var handler = new TimesOutOnceHandler("""{ "candidates": [{ "content": { "parts": [{ "text": "ok" }] } }] }""");
+        var client = new GeminiMessagesClient(new HttpClient(handler), "fake-key", retryDelay: (_, _) => Task.CompletedTask);
+
+        var response = await client.CreateAsync(new MessageCreateParams
+        {
+            Model = "gemini-3.8-flash",
+            MaxTokens = 1024,
+            Messages = [new() { Role = Role.User, Content = "go" }],
+        });
+
+        Assert.Equal(2, handler.CallCount);
+        Assert.Contains(response.Content.Select(b => b.Value).OfType<TextBlock>(), b => b.Text == "ok");
+    }
+
+    /// Throws what HttpClient throws when its Timeout elapses on the first call, then succeeds.
+    private class TimesOutOnceHandler(string successBody) : HttpMessageHandler
+    {
+        public int CallCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            CallCount++;
+            if (CallCount == 1)
+            {
+                throw new TaskCanceledException("timed out", new TimeoutException());
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(successBody, Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
     private class SequencedStatusHandler(params (HttpStatusCode Status, string Body)[] responses) : HttpMessageHandler
     {
         public int CallCount { get; private set; }
