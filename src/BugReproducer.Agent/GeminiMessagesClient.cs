@@ -20,11 +20,11 @@ namespace BugReproducer.Agent;
 public class GeminiMessagesClient(HttpClient httpClient, string apiKey, Func<int, CancellationToken, Task>? retryDelay = null)
     : IMessagesClient
 {
-    // Real backoff by default; tests inject a no-op so retry behavior is verifiable
-    // without actually waiting out several seconds of delay per attempt.
+    // Real backoff by default (exponential: 5, 10, 20, 40, 60s -- about 2 minutes in total,
+    // proportionate to agent turns that already take minutes on this model); tests inject
+    // a no-op so retry behavior is verifiable without actually waiting.
     private readonly Func<int, CancellationToken, Task> _retryDelay =
-        retryDelay ?? ((attempt, ct) => Task.Delay(TimeSpan.FromSeconds(5 * attempt), ct));
-
+        retryDelay ?? ((attempt, ct) => Task.Delay(TimeSpan.FromSeconds(Math.Min(5 * Math.Pow(2, attempt - 1), 60)), ct));
 
     // Gemini's thinking mode (always on for gemini-3.8-flash -- there is no "off" level,
     // and signatures are "always present" per the docs) attaches an opaque
@@ -190,10 +190,12 @@ public class GeminiMessagesClient(HttpClient httpClient, string apiKey, Func<int
     /// twice in two consecutive real runs while testing this -- that treating it as
     /// fatal would make the agent unusably flaky rather than just slow. Retries 429/5xx
     /// with backoff; a real client error (400/401/404/...) still fails immediately,
-    /// since that's a bug to fix, not a capacity blip to wait out.
+    /// since that's a bug to fix, not a capacity blip to wait out. A 429 for a *daily*
+    /// quota also fails immediately: Gemini says "retry in ~16h" there, and every retry
+    /// would just spend more of a 20-requests-per-day free-tier budget for nothing.
     private async Task<string> SendWithRetryAsync(string requestUri, JsonObject body, CancellationToken cancellationToken)
     {
-        const int maxAttempts = 4;
+        const int maxAttempts = 6;
         for (var attempt = 1; ; attempt++)
         {
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
@@ -215,6 +217,14 @@ public class GeminiMessagesClient(HttpClient httpClient, string apiKey, Func<int
                 or System.Net.HttpStatusCode.BadGateway
                 or System.Net.HttpStatusCode.ServiceUnavailable
                 or System.Net.HttpStatusCode.GatewayTimeout;
+
+            var isDailyQuotaExhausted = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+                && responseBody.Contains("PerDay", StringComparison.Ordinal);
+            if (isDailyQuotaExhausted)
+            {
+                throw new InvalidOperationException(
+                    $"Gemini daily quota exhausted (429) -- retrying won't help until the quota resets: {responseBody}");
+            }
 
             if (!isTransient || attempt >= maxAttempts)
             {

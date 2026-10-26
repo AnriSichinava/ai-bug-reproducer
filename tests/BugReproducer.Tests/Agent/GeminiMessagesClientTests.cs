@@ -239,6 +239,25 @@ public class GeminiMessagesClientTests
         Assert.Contains("400", ex.Message);
     }
 
+    [Fact]
+    public async Task ADailyQuota429FailsImmediatelyRatherThanBurningMoreQuota()
+    {
+        var handler = new SequencedStatusHandler(
+            (HttpStatusCode.TooManyRequests,
+                """{ "error": { "status": "RESOURCE_EXHAUSTED", "details": [{ "violations": [{ "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }"""));
+        var client = new GeminiMessagesClient(new HttpClient(handler), "fake-key", retryDelay: (_, _) => Task.CompletedTask);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => client.CreateAsync(new MessageCreateParams
+        {
+            Model = "gemini-3.8-flash",
+            MaxTokens = 1024,
+            Messages = [new() { Role = Role.User, Content = "go" }],
+        }));
+
+        Assert.Equal(1, handler.CallCount);
+        Assert.Contains("daily quota", ex.Message);
+    }
+
     private class SequencedStatusHandler(params (HttpStatusCode Status, string Body)[] responses) : HttpMessageHandler
     {
         public int CallCount { get; private set; }
